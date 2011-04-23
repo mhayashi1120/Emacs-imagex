@@ -36,6 +36,10 @@
 ;;
 ;;  M-x imagex-global-sticky-mode
 
+;;; TODO:
+
+;; * save zoomed picture.
+
 ;;; Code:
 
 (eval-when-compile
@@ -137,12 +141,12 @@
         (call-interactively command)))))
 
 (defun imagex-sticky-zoom-in (&optional arg)
-  "Zoom in image at point."
+  "Zoom in image at point. If there is no image, fallback to original command."
   (interactive "p")
   (imagex-sticky-zoom (* 1.1 arg)))
 
 (defun imagex-sticky-zoom-out (&optional arg)
-  "Zoom out image at point."
+  "Zoom out image at point. If there is no image, fallback to original command."
   (interactive "p")
   (imagex-sticky-zoom (/ 1 1.1 arg)))
 
