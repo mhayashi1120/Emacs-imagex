@@ -152,7 +152,7 @@
 
 (defun imagex-sticky-zoom (ratio)
   (let ((image (get-text-property (point) 'display)))
-    (if image
+    (if (and image (eq (car-safe image) 'image))
         (imagex-zoom image ratio)
       (imagex-sticky-fallback this-command))))
 
