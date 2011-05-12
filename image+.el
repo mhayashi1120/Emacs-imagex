@@ -32,13 +32,14 @@
 
 ;;; Usage:
 
-;; To enable the feature
+;; * To enable the feature
 ;;
 ;;  M-x imagex-global-sticky-mode
-
-;;; TODO:
+;;
 ;; * C-c + / C-c -: Zoom in/out image.
 ;; * C-c C-x C-s: Save current image.
+
+;;; TODO:
 
 ;;; Code:
 
