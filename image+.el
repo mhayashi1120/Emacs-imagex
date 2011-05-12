@@ -37,8 +37,8 @@
 ;;  M-x imagex-global-sticky-mode
 
 ;;; TODO:
-
-;; * save zoomed picture.
+;; * C-c + / C-c -: Zoom in/out image.
+;; * C-c C-s: Save current image.
 
 ;;; Code:
 
@@ -67,12 +67,6 @@
                              "-resize" (format "%sx%s" pixel-x pixel-y) "-" "-"))
       (create-image (buffer-string) nil t))))
 
-(defun imagex-propertize-keymap-before-point ()
-  (save-excursion
-    (let ((region (imagex-get-image-region-at-point (max (1- (point)) (point-min)))))
-      (when region
-        (put-text-property (car region) (cdr region) 'local-map imagex-sticky-mode-map)))))
-
 (defun imagex-get-image-region-at-point (point)
   (let ((image (get-text-property point 'display)))
     (when image
@@ -95,8 +89,9 @@
         (put-text-property start end 'display image)))
     (set-buffer-modified-p nil)))
 
-(defun imagex-zoom (image ratio)
-  (let* ((pixels (image-size image t))
+(defun imagex-zoom (ratio)
+  (let* ((image (image-sticky-current-image))
+         (pixels (image-size image t))
          (new-image (imagex-create-resize-image
                      image 
                      (truncate (* (car pixels) ratio))
@@ -113,6 +108,8 @@
 
   (define-key map "\C-c+" 'imagex-sticky-zoom-in)
   (define-key map "\C-c-" 'imagex-sticky-zoom-out)
+  (define-key map "\C-c\C-x\C-s" 'imagex-sticky-save-image)
+  
 
   (setq imagex-sticky-mode-map map))
 
@@ -150,11 +147,40 @@
   (interactive "p")
   (imagex-sticky-zoom (/ 1 1.1 arg)))
 
+(defun imagex-sticky-save-image ()
+  "Save image at point. If there is no image, fallback to original command."
+  (interactive)
+  (condition-case nil
+      (let* ((image (image-sticky-current-image))
+             (spec (cdr image)))
+        (cond
+         ((plist-get spec :file)
+          ;;TODO test
+          (let* ((src-file (plist-get spec :file))
+                 (ext (concat "." (symbol-name (image-type src-file nil))))
+                 (file (read-file-name "Image File: " nil nil nil ext)))
+            (let ((coding-system-for-write 'binary))
+              (copy-file src-file file t))))
+         ((plist-get spec :data)
+          (let* ((data (plist-get spec :data))
+                 (ext (concat "." (symbol-name (image-type data nil t))))
+                 (file (read-file-name "Image File: " nil nil nil ext)))
+            (let ((coding-system-for-write 'binary))
+              (write-region data nil file))))
+         (t (error "Abort"))))
+    (error
+     (imagex-sticky-fallback this-command))))
+
+(defun image-sticky-current-image ()
+  (get-text-property 
+   (if (derived-mode-p 'image-mode) (point-min) (point)) 
+   'display))
+
 (defun imagex-sticky-zoom (ratio)
-  (let ((image (get-text-property (point) 'display)))
-    (if (and image (eq (car-safe image) 'image))
-        (imagex-zoom image ratio)
-      (imagex-sticky-fallback this-command))))
+  (condition-case nil
+      (imagex-zoom ratio)
+    (error
+     (imagex-sticky-fallback this-command))))
 
 (provide 'image+)
 
