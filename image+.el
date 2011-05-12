@@ -38,7 +38,7 @@
 
 ;;; TODO:
 ;; * C-c + / C-c -: Zoom in/out image.
-;; * C-c C-s: Save current image.
+;; * C-c C-x C-s: Save current image.
 
 ;;; Code:
 
