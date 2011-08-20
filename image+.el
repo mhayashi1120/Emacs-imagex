@@ -90,14 +90,26 @@
         (put-text-property start end 'display image)))
     (set-buffer-modified-p nil)))
 
-(defun imagex-zoom (ratio)
-  (let* ((image (image-sticky-current-image))
-         (pixels (image-size image t))
+(defun imagex--zoom (image ratio)
+  (let* ((pixels (image-size image t))
          (new-image (imagex-create-resize-image
                      image 
                      (truncate (* (car pixels) ratio))
                      (truncate (* (cdr pixels) ratio)))))
-    (imagex-replace-image (point) new-image)))
+    new-image))
+
+(defun imagex--maximize (image)
+  (let* ((pixels (image-size image t))
+         (rect (save-window-excursion
+                 (delete-other-windows)
+                 (let ((edges (window-inside-pixel-edges)))
+                   (cons (nth 2 edges) (nth 3 edges)))))
+         (w (car rect))
+         (h (cdr rect))
+         (wr (/ w (ftruncate (car pixels))))
+         (hr (/ h (ftruncate (cdr pixels))))
+         (ratio (min wr hr)))
+    (imagex--zoom image ratio)))
 
 ;;
 ;; Image+ Minor mode definitions
@@ -109,6 +121,7 @@
 
   (define-key map "\C-c+" 'imagex-sticky-zoom-in)
   (define-key map "\C-c-" 'imagex-sticky-zoom-out)
+  (define-key map "\C-c\em" 'imagex-stickey-maximize)
   (define-key map "\C-c\C-x\C-s" 'imagex-sticky-save-image)
   
 
@@ -141,18 +154,18 @@
 (defun imagex-sticky-zoom-in (&optional arg)
   "Zoom in image at point. If there is no image, fallback to original command."
   (interactive "p")
-  (imagex-sticky-zoom (* 1.1 arg)))
+  (imagex-sticky--zoom (* 1.1 arg)))
 
 (defun imagex-sticky-zoom-out (&optional arg)
   "Zoom out image at point. If there is no image, fallback to original command."
   (interactive "p")
-  (imagex-sticky-zoom (/ 1 1.1 arg)))
+  (imagex-sticky--zoom (/ 1 1.1 arg)))
 
 (defun imagex-sticky-save-image ()
   "Save image at point. If there is no image, fallback to original command."
   (interactive)
   (condition-case nil
-      (let* ((image (image-sticky-current-image))
+      (let* ((image (imagex-sticky--current-image))
              (spec (cdr image)))
         (cond
          ((plist-get spec :file)
@@ -172,16 +185,36 @@
     (error
      (imagex-sticky-fallback this-command))))
 
-(defun image-sticky-current-image ()
+(defun imagex-sticky--current-image ()
   (get-text-property 
-   (if (derived-mode-p 'image-mode) (point-min) (point)) 
+   ;;TODO
+   (if (derived-mode-p 'image-mode) (point-min) (point))
    'display))
 
-(defun imagex-sticky-zoom (ratio)
+(defun imagex-sticky--zoom (ratio)
   (condition-case nil
-      (imagex-zoom ratio)
+      (imagex-sticky--zoom-internal ratio)
     (error
      (imagex-sticky-fallback this-command))))
+
+(defun imagex-sticky--zoom-internal (ratio)
+  (let* ((image (imagex-sticky--current-image))
+         (new-image (imagex--zoom image ratio)))
+    ;;TODO see current-image
+    (imagex-replace-image (point) new-image)))
+
+(defun imagex-stickey-maximize ()
+  "Maximize the point image to fit the current frame."
+  (interactive)
+  (condition-case nil
+      (imagex-sticky-maximize-internal)
+    (error
+     (imagex-sticky-fallback this-command))))
+
+(defun imagex-sticky-maximize-internal ()
+  (let* ((image (imagex-sticky--current-image))
+         (new-image (imagex--maximize image)))
+    (imagex-replace-image (point) new-image)))
 
 (provide 'image+)
 
