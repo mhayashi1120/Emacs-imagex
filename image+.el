@@ -70,7 +70,8 @@
 
 (defun imagex-get-image-region-at-point (point)
   (let ((image (get-text-property point 'display)))
-    (when image
+    (when (and image (listp image) 
+               (eq (car image) 'image))
       (let ((start (previous-single-property-change point 'display)))
         ;; consider edge of start image
         (when (or (null start) 
