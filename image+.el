@@ -38,6 +38,10 @@
 ;;
 ;; * C-c + / C-c -: Zoom in/out image.
 ;; * C-c C-x C-s: Save current image.
+;;
+;; * Adjusted image when `auto-image-file-mode' is activated
+;;
+;;  M-x imagex-auto-adjust-mode
 
 ;;; TODO:
 
@@ -47,6 +51,8 @@
   (require 'easy-mmode))
 
 (require 'image)
+(require 'image-file)
+(require 'advice)
 
 (defgroup image+ ()
   "Image extensions"
