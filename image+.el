@@ -273,20 +273,6 @@
 	  (setq truncate-lines t))
         rval))))
 
-(defcustom imagex-identify-command "identify"
-  "ImageMagick identify command"
-  :group 'image+
-  :type 'file)
-
-(defun imagex-file-image-size (file)
-  (with-temp-buffer
-    (call-process imagex-identify-command nil t nil file)
-    (goto-char (point-min))
-    (and (re-search-forward "\\([0-9]+\\)x\\([0-9]+\\)" nil t)
-         (let ((w (string-to-number (match-string 1)))
-               (h (string-to-number (match-string 2))))
-           (cons w h)))))
-
 (provide 'image+)
 
 ;;; image+.el ends here
