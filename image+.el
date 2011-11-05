@@ -37,6 +37,7 @@
 ;;  M-x imagex-global-sticky-mode
 ;;
 ;; * C-c + / C-c -: Zoom in/out image.
+;; * C-c M-m: Adjust image to current frame size.
 ;; * C-c C-x C-s: Save current image.
 ;;
 ;; * Adjusted image when `auto-image-file-mode' is activated
@@ -251,6 +252,8 @@
   (setq ad-return-value 
         (apply 'imagex-insert-file-adjusted-image args)))
 
+;; insert resized image that adjusted to current frame
+;; see `insert-image-file'
 (defun imagex-insert-file-adjusted-image (file &optional visit beg end replace)
   (when (and (or (null beg) (zerop beg)) (null end))
     (let ((rval 
@@ -268,12 +271,8 @@
                         (image-file-yank-handler nil t)
                         intangible ,new
                         rear-nonsticky (display intangible)
-                        ;; This a cheap attempt to make the whole buffer
-                        ;; read-only when we're visiting the file (as
-                        ;; opposed to just inserting it).
                         ,@'(read-only t front-sticky (read-only)))))
         (add-text-properties ibeg iend props)
-        ;; see `insert-image-file'
         (when visitingp
 	  (setq cursor-type nil)
 	  (setq truncate-lines t))
