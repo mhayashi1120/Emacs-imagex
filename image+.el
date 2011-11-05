@@ -48,24 +48,36 @@
 
 (require 'image)
 
+(defgroup image+ ()
+  "Image extensions"
+  :group 'multimedia)
+
 (defcustom imagex-convert-command "convert"
   "ImageMagick convert command"
-  :group 'image
+  :group 'image+
   :type 'file)
 
 (defun imagex-create-resize-image (image pixel-x pixel-y)
   (let ((spec (cdr image)))
     (with-temp-buffer
       (set-buffer-multibyte nil)
-      (or (and (plist-get spec :data)
-               (progn (insert (plist-get spec :data)) t))
-          (insert-file-contents (plist-get spec :file)))
       (let ((coding-system-for-read 'binary)
             (coding-system-for-write 'binary))
-        (call-process-region (point-min) (point-max) 
-                             imagex-convert-command
-                             t (current-buffer) nil
-                             "-resize" (format "%sx%s" pixel-x pixel-y) "-" "-"))
+        (cond
+         ((plist-get spec :data)
+          (insert (plist-get spec :data))
+          ;; stdin to current-buffer
+          (call-process-region
+           (point-min) (point-max) imagex-convert-command
+           t (current-buffer) nil
+           "-resize" (format "%sx%s" pixel-x pixel-y) "-" "-"))
+         ((plist-get spec :file)
+          ;; stdin to current-buffer
+          (call-process 
+           imagex-convert-command (plist-get spec :file) t nil
+           "-resize" (format "%sx%s" pixel-x pixel-y) "-" "-"))
+         (t
+          (error "Not a supported image"))))
       (create-image (buffer-string) nil t))))
 
 (defun imagex-get-image-region-at-point (point)
@@ -100,6 +112,7 @@
     new-image))
 
 (defun imagex--maximize (image)
+  "Adjust IMAGE to current frame."
   (let* ((pixels (image-size image t))
          (rect (save-window-excursion
                  (delete-other-windows)
@@ -130,13 +143,13 @@
 
 (define-minor-mode imagex-sticky-mode
   "To manipulate Image at point."
-  :group 'image
+  :group 'image+
   :keymap imagex-sticky-mode-map
   )
 
 (define-globalized-minor-mode imagex-global-sticky-mode
   imagex-sticky-mode imagex-sticky-mode-maybe 
-  :group 'image)
+  :group 'image+)
 
 (defun imagex-sticky-mode-maybe ()
   (unless (minibufferp (current-buffer))
@@ -208,14 +221,71 @@
   "Maximize the point image to fit the current frame."
   (interactive)
   (condition-case nil
-      (imagex-sticky-maximize-internal)
+      (let* ((image (imagex-sticky--current-image))
+             (new-image (imagex--maximize image)))
+        (imagex-replace-image (point) new-image))
     (error
      (imagex-sticky-fallback this-command))))
 
-(defun imagex-sticky-maximize-internal ()
-  (let* ((image (imagex-sticky--current-image))
-         (new-image (imagex--maximize image)))
-    (imagex-replace-image (point) new-image)))
+
+
+(define-minor-mode imagex-auto-adjust-mode
+  "Adjust image to current frame automatically when 
+`auto-image-file-mode' is activated."
+  :glocal t
+  :group 'image+
+  (funcall (if imagex-auto-adjust-mode 
+               'ad-enable-advice
+             'ad-disable-advice) 
+           'insert-image-file 'around 'imagex-insert-adjust-image)
+  (ad-activate 'insert-image-file))
+
+(defadvice insert-image-file
+  (around imagex-insert-adjust-image (&rest args) disable)
+  (setq ad-return-value 
+        (apply 'imagex-insert-file-adjusted-image args)))
+
+(defun imagex-insert-file-adjusted-image (file &optional visit beg end replace)
+  (when (and (or (null beg) (zerop beg)) (null end))
+    (let ((rval 
+           (image-file-call-underlying #'insert-file-contents-literally
+                                       'insert-file-contents
+                                       file visit beg end replace)))
+      (let* ((ibeg (point))
+	     (iend (+ (point) (cadr rval)))
+	     (visitingp (and visit (= ibeg (point-min)) (= iend (point-max))))
+             (image (create-image file))
+             (new (imagex--maximize image))
+             (props
+              `(display ,new
+                        yank-handler
+                        (image-file-yank-handler nil t)
+                        intangible ,new
+                        rear-nonsticky (display intangible)
+                        ;; This a cheap attempt to make the whole buffer
+                        ;; read-only when we're visiting the file (as
+                        ;; opposed to just inserting it).
+                        ,@'(read-only t front-sticky (read-only)))))
+        (add-text-properties ibeg iend props)
+        ;; see `insert-image-file'
+        (when visitingp
+	  (setq cursor-type nil)
+	  (setq truncate-lines t))
+        rval))))
+
+(defcustom imagex-identify-command "identify"
+  "ImageMagick identify command"
+  :group 'image+
+  :type 'file)
+
+(defun imagex-file-image-size (file)
+  (with-temp-buffer
+    (call-process imagex-identify-command nil t nil file)
+    (goto-char (point-min))
+    (and (re-search-forward "\\([0-9]+\\)x\\([0-9]+\\)" nil t)
+         (let ((w (string-to-number (match-string 1)))
+               (h (string-to-number (match-string 2))))
+           (cons w h)))))
 
 (provide 'image+)
 
