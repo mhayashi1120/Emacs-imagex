@@ -20,10 +20,14 @@ Or put the following expression into your ~/.emacs.
 
 (imagex-global-sticky-mode 1)
 
+This allows you to manupulate image at point.
+
 * M-x imagex-auto-adjust-mode
+
+TODO about auto-image-file-mode
 
 Or put the following expression into your ~/.emacs.
 
 (imagex-auto-adjust-mode 1)
 
-
+This cause `auto-image-file-mode'

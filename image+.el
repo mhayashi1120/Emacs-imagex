@@ -1,4 +1,4 @@
-;;; image+.el --- Image extensions
+;;; image+.el --- Image manupulation extensions for Emacs
 
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: image extensions
@@ -32,7 +32,7 @@
 
 ;;; Usage:
 
-;; * To enable the feature
+;; * To manupulate a image under cursor.
 ;;
 ;;  M-x imagex-global-sticky-mode
 ;;
@@ -40,11 +40,13 @@
 ;; * C-c M-m: Adjust image to current frame size.
 ;; * C-c C-x C-s: Save current image.
 ;;
-;; * Adjusted image when `auto-image-file-mode' is activated
+;; * Adjusted image when open image file.
 ;;
 ;;  M-x imagex-auto-adjust-mode
 
 ;;; TODO:
+
+;; * show original image.
 
 ;;; Code:
 
@@ -237,46 +239,57 @@
 
 
 (define-minor-mode imagex-auto-adjust-mode
-  "Adjust image to current frame automatically when 
-`auto-image-file-mode' is activated."
-  :glocal t
+  "Adjust image to current frame automatically in `image-mode'."
+  :global t
   :group 'image+
-  (funcall (if imagex-auto-adjust-mode 
-               'ad-enable-advice
-             'ad-disable-advice) 
-           'insert-image-file 'around 'imagex-insert-adjust-image)
-  (ad-activate 'insert-image-file))
+  (mapc
+   (lambda (p)
+     (funcall (if imagex-auto-adjust-mode 
+                  'ad-enable-advice
+                'ad-disable-advice)
+              (car p) 'around (cadr p))
+     (ad-activate (car p)))
+   imagex-auto-adjust-alist))
+
+(defvar imagex-auto-adjust-alist
+  '(
+    (insert-image-file imagex-insert-image-file-ad)
+    (image-toggle-display-image imagex-image-toggle-display-image-ad)
+    ))
 
 (defadvice insert-image-file
-  (around imagex-insert-adjust-image (&rest args) disable)
-  (setq ad-return-value 
-        (apply 'imagex-insert-file-adjusted-image args)))
+  (around imagex-insert-image-file-ad (&rest args) disable)
+  (imagex-auto-adjust-activate
+   (setq ad-return-value ad-do-it)))
 
-;; insert resized image that adjusted to current frame
-;; see `insert-image-file'
-(defun imagex-insert-file-adjusted-image (file &optional visit beg end replace)
-  (when (and (or (null beg) (zerop beg)) (null end))
-    (let ((rval 
-           (image-file-call-underlying #'insert-file-contents-literally
-                                       'insert-file-contents
-                                       file visit beg end replace)))
-      (let* ((ibeg (point))
-	     (iend (+ (point) (cadr rval)))
-	     (visitingp (and visit (= ibeg (point-min)) (= iend (point-max))))
-             (image (create-image file))
-             (new (imagex--maximize image))
-             (props
-              `(display ,new
-                        yank-handler
-                        (image-file-yank-handler nil t)
-                        intangible ,new
-                        rear-nonsticky (display intangible)
-                        ,@'(read-only t front-sticky (read-only)))))
-        (add-text-properties ibeg iend props)
-        (when visitingp
-	  (setq cursor-type nil)
-	  (setq truncate-lines t))
-        rval))))
+(defadvice image-toggle-display-image
+  (around imagex-image-toggle-display-image-ad (&rest args) disable)
+  (imagex-auto-adjust-activate
+   (setq ad-return-value ad-do-it)))
+
+(defmacro imagex-auto-adjust-activate (&rest body)
+  "Execute BODY with activating `create-image' advice."
+  `(progn
+     (ad-enable-advice 'create-image 'around 'imagex-create-image)
+     (ad-activate 'create-image)
+     (unwind-protect
+         (progn ,@body)
+       (ad-disable-advice 'create-image 'around 'imagex-create-image)
+       (ad-activate 'create-image))))
+
+(defadvice create-image
+  (around imagex-create-image (&rest args) disable)
+  (setq ad-return-value 
+        (apply 'imagex-create-adjusted-image args)))
+
+(defun imagex-create-adjusted-image (file-or-data &optional type data-p &rest props)
+  (let ((img 
+         (apply (ad-get-orig-definition 'create-image) file-or-data type data-p props)))
+    ;; suppress eternal recursive
+    (if (boundp 'imagex-adjusting)
+        img
+      (let ((imagex-adjusting t))
+        (imagex--maximize img)))))
 
 (provide 'image+)
 
