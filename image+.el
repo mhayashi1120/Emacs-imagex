@@ -238,6 +238,9 @@
 
 
 
+(defvar imagex--original-size nil)
+(make-variable-buffer-local 'imagex--original-size)
+
 (define-minor-mode imagex-auto-adjust-mode
   "Adjust image to current frame automatically in `image-mode'."
   :global t
@@ -285,7 +288,7 @@
 (defun imagex-create-adjusted-image (file-or-data &optional type data-p &rest props)
   (let ((img 
          (apply (ad-get-orig-definition 'create-image) file-or-data type data-p props)))
-    ;; suppress eternal recursive
+    ;; suppress eternal recurse
     (if (boundp 'imagex-adjusting)
         img
       (let ((imagex-adjusting t))
