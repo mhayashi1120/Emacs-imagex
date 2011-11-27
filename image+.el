@@ -51,6 +51,7 @@
 ;;; Code:
 
 (eval-when-compile
+  (require 'cl)
   (require 'easy-mmode))
 
 (require 'image)
@@ -66,12 +67,15 @@
   :group 'image+
   :type 'file)
 
+(defvar this-command)
+
 (defun imagex-create-resize-image (image pixel-x pixel-y)
   (let ((spec (cdr image)))
     (with-temp-buffer
       (set-buffer-multibyte nil)
       (let ((coding-system-for-read 'binary)
             (coding-system-for-write 'binary))
+        ;;TODO return value.
         (cond
          ((plist-get spec :data)
           (insert (plist-get spec :data))
@@ -122,15 +126,15 @@
 
 (defun imagex--maximize (image)
   "Adjust IMAGE to current frame."
+  (let ((rect (let ((edges (window-inside-pixel-edges)))
+                (cons (nth 2 edges) (nth 3 edges)))))
+    (imagex--fit-to-size image (car rect) (cdr rect))))
+
+(defun imagex--fit-to-size (image width height)
+  "Resize IMAGE with preserving ratio."
   (let* ((pixels (image-size image t))
-         (rect (save-window-excursion
-                 (delete-other-windows)
-                 (let ((edges (window-inside-pixel-edges)))
-                   (cons (nth 2 edges) (nth 3 edges)))))
-         (w (car rect))
-         (h (cdr rect))
-         (wr (/ w (ftruncate (car pixels))))
-         (hr (/ h (ftruncate (cdr pixels))))
+         (wr (/ width (ftruncate (car pixels))))
+         (hr (/ height (ftruncate (cdr pixels))))
          (ratio (min wr hr)))
     (imagex--zoom image ratio)))
 
@@ -238,6 +242,18 @@
 
 
 
+(defun imagex--activate-advice (flag alist)
+  (mapc
+   (lambda (p)
+     (funcall (if flag 
+                  'ad-enable-advice
+                'ad-disable-advice)
+              (car p) 'around (cadr p))
+     (ad-activate (car p)))
+   alist))
+
+
+
 (defvar imagex--original-size nil)
 (make-variable-buffer-local 'imagex--original-size)
 
@@ -245,16 +261,10 @@
   "Adjust image to current frame automatically in `image-mode'."
   :global t
   :group 'image+
-  (mapc
-   (lambda (p)
-     (funcall (if imagex-auto-adjust-mode 
-                  'ad-enable-advice
-                'ad-disable-advice)
-              (car p) 'around (cadr p))
-     (ad-activate (car p)))
-   imagex-auto-adjust-alist))
+  (imagex--activate-advice
+   imagex-auto-adjust-mode imagex-auto-adjust-advices))
 
-(defvar imagex-auto-adjust-alist
+(defvar imagex-auto-adjust-advices
   '(
     (insert-image-file imagex-insert-image-file-ad)
     (image-toggle-display-image imagex-image-toggle-display-image-ad)
@@ -293,6 +303,101 @@
         img
       (let ((imagex-adjusting t))
         (imagex--maximize img)))))
+
+
+
+(defvar imagex-dired-async-advices
+  '(
+    (image-dired-display-thumbs imagex-dired-display-thumbs)
+    ))
+
+(define-minor-mode imagex-dired-async-mode
+  "Extension for `image-dired' asynchrounous image thumbnail."
+  :global t
+  :group 'image+
+  (when imagex-dired-async-mode
+    (require 'image-dired))
+  (imagex--activate-advice 
+   imagex-dired-async-mode imagex-dired-async-advices))
+
+(defadvice image-dired-display-thumbs
+  (around imagex-dired-display-thumbs (&optional arg append do-not-pop) disable)
+  (if arg
+      (setq ad-return-value ad-do-it)
+    (setq ad-return-value 
+          (imagex-dired--display-thumbs append do-not-pop))))
+
+(defun imagex-dired--display-thumbs (&optional append do-not-pop)
+  (let ((buf (image-dired-create-thumbnail-buffer))
+        (files (dired-get-marked-files))
+        (dired-buf (current-buffer)))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (unless append
+          (erase-buffer)))
+      (imagex-dired--invoke-process files buf dired-buf))
+    (if do-not-pop
+        (display-buffer image-dired-thumbnail-buffer)
+      (pop-to-buffer image-dired-thumbnail-buffer))))
+
+;; FIXME duplicated from `image-dired-display-thumbs'
+(defun imagex-dired--prepare-line-up ()
+  (cond 
+   ((eq 'dynamic image-dired-line-up-method)
+    (image-dired-line-up-dynamic))
+   ((eq 'fixed image-dired-line-up-method)
+    (image-dired-line-up))
+   ((eq 'interactive image-dired-line-up-method)
+    (image-dired-line-up-interactive))
+   ((eq 'none image-dired-line-up-method)
+    nil)
+   (t
+    (image-dired-line-up-dynamic))))
+
+(defun imagex-dired--invoke-process (files thumb-buf dired-buf)
+  (when files
+    (let* ((curr-file (car files))
+           (thumb-name (image-dired-thumb-name curr-file)))
+      (flet ((call-process 
+              (program &optional infile buffer display &rest args)
+              (apply 'start-process "image-dired" nil program args)))
+        (let ((proc 
+               (if (file-exists-p thumb-name)
+                   ;;FIXME trick
+                   (start-process "image-dired trick" nil shell-file-name
+                                  shell-command-switch "")
+                 (image-dired-create-thumb curr-file thumb-name))))
+          (set-process-sentinel proc 'imagex-dired--thumb-process-sentinel)
+          (process-put proc 'thumb-name thumb-name)
+          (process-put proc 'curr-file curr-file)
+          (process-put proc 'dired-buf dired-buf)
+          (process-put proc 'thumb-buf thumb-buf)
+          (process-put proc 'files (cdr files))
+          proc)))))
+
+(defun imagex-dired--thumb-process-sentinel (proc event)
+  (when (memq (process-status proc) '(exit signal))
+    (let ((thumb-name (process-get proc 'thumb-name))
+          (curr-file (process-get proc 'curr-file))
+          (dired-buf (process-get proc 'dired-buf))
+          (thumb-buf (process-get proc 'thumb-buf))
+          (files (process-get proc 'files)))
+      (unwind-protect
+          (condition-case err
+              (if (and (not (file-exists-p thumb-name))
+                       (not (= 0 (process-exit-status proc))))
+                  (message "Thumb could not be created for file %s" curr-file)
+                (imagex-dired--thumb-insert thumb-buf thumb-name curr-file dired-buf))
+            (error (message "%s" err)))
+        (imagex-dired--invoke-process files thumb-buf dired-buf)))))
+
+(defun imagex-dired--thumb-insert (buf thumb file dired)
+  (with-current-buffer (or buf (image-dired-create-thumbnail-buffer))
+    (save-excursion
+      (let ((inhibit-read-only t))
+        (goto-char (point-max))
+        (image-dired-insert-thumbnail thumb file dired)
+        (imagex-dired--prepare-line-up)))))
 
 (provide 'image+)
 
