@@ -4,7 +4,7 @@
 ;; Keywords: image extensions
 ;; URL: http://github.com/mhayashi1120/Emacs-imagex/raw/master/image+.el
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.5.2
+;; Version: 0.5.3
 
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -43,6 +43,12 @@
 ;; * Adjusted image when open image file.
 ;;
 ;;  M-x imagex-auto-adjust-mode
+;; 
+;;  TODO image-file-mode, doc-view-mode, any major mode has image
+;;
+;; * Asynchronous `image-dired'
+;;
+;;  M-x imagex-dired-async-mode
 
 ;;; TODO:
 
@@ -75,20 +81,21 @@
       (set-buffer-multibyte nil)
       (let ((coding-system-for-read 'binary)
             (coding-system-for-write 'binary))
-        ;;TODO return value.
         (cond
          ((plist-get spec :data)
           (insert (plist-get spec :data))
           ;; stdin to current-buffer
-          (call-process-region
-           (point-min) (point-max) imagex-convert-command
-           t (current-buffer) nil
-           "-resize" (format "%sx%s" pixel-x pixel-y) "-" "-"))
+          (unless (eq (call-process-region
+                       (point-min) (point-max) imagex-convert-command
+                       t (current-buffer) nil
+                       "-resize" (format "%sx%s" pixel-x pixel-y) "-" "-") 0)
+            (error "Cannot convert image")))
          ((plist-get spec :file)
           ;; stdin to current-buffer
-          (call-process 
-           imagex-convert-command (plist-get spec :file) t nil
-           "-resize" (format "%sx%s" pixel-x pixel-y) "-" "-"))
+          (unless (eq (call-process 
+                       imagex-convert-command (plist-get spec :file) t nil
+                       "-resize" (format "%sx%s" pixel-x pixel-y) "-" "-") 0)
+            (error "Cannot convert image")))
          (t
           (error "Not a supported image"))))
       (create-image (buffer-string) nil t))))
@@ -122,6 +129,7 @@
                      image 
                      (truncate (* (car pixels) ratio))
                      (truncate (* (cdr pixels) ratio)))))
+    (imagex--put-original new-image image)
     new-image))
 
 (defun imagex--maximize (image)
@@ -149,9 +157,9 @@
   (define-key map "\C-c+" 'imagex-sticky-zoom-in)
   (define-key map "\C-c-" 'imagex-sticky-zoom-out)
   (define-key map "\C-c\em" 'imagex-stickey-maximize)
+  (define-key map "\C-c\eo" 'imagex-sticky-restore-original)
   (define-key map "\C-c\C-x\C-s" 'imagex-sticky-save-image)
   
-
   (setq imagex-sticky-mode-map map))
 
 (define-minor-mode imagex-sticky-mode
@@ -212,11 +220,33 @@
     (error
      (imagex-sticky-fallback this-command))))
 
+(defun imagex-stickey-maximize ()
+  "Maximize the point image to fit the current frame."
+  (interactive)
+  (condition-case nil
+      (let* ((image (imagex-sticky--current-image))
+             (new-image (imagex--maximize image)))
+        (imagex-replace-image (point) new-image))
+    (error
+     (imagex-sticky-fallback this-command))))
+
+(defun imagex-sticky-restore-original ()
+  "Restore the original image if current image has been converted."
+  (interactive)
+  (let* ((img (imagex-sticky--current-image))
+         (orig (plist-get (cdr img) 'imagex-original-image)))
+    (unless orig
+      (error "No original image here"))
+    (imagex-replace-image (point) orig)))
+
 (defun imagex-sticky--current-image ()
-  (get-text-property 
-   ;;TODO
-   (if (derived-mode-p 'image-mode) (point-min) (point))
-   'display))
+  (cond
+   ((derived-mode-p 'image-mode)
+    (image-get-display-property))
+   ((derived-mode-p 'doc-view-mode)
+    (doc-view-current-image))
+   (t
+    (get-text-property (point) 'display))))
 
 (defun imagex-sticky--zoom (ratio)
   (condition-case nil
@@ -230,55 +260,55 @@
     ;;TODO see current-image
     (imagex-replace-image (point) new-image)))
 
-(defun imagex-stickey-maximize ()
-  "Maximize the point image to fit the current frame."
-  (interactive)
-  (condition-case nil
-      (let* ((image (imagex-sticky--current-image))
-             (new-image (imagex--maximize image)))
-        (imagex-replace-image (point) new-image))
-    (error
-     (imagex-sticky-fallback this-command))))
-
+(defun imagex--put-original (image original)
+  (unless (plist-get (cdr image) 'imagex-original-image)
+    (plist-put (cdr image) 'imagex-original-image 
+               (or (plist-get (cdr original) 'imagex-original-image)
+                   original))))
 
 
 (defun imagex--activate-advice (flag alist)
   (mapc
    (lambda (p)
-     (funcall (if flag 
-                  'ad-enable-advice
-                'ad-disable-advice)
-              (car p) 'around (cadr p))
-     (ad-activate (car p)))
+     (condition-case nil
+         (progn
+           (funcall (if flag 
+                        'ad-enable-advice
+                      'ad-disable-advice)
+                    (car p) 'around (cadr p))
+           (ad-activate (car p)))
+       (error nil)))
    alist))
 
 
 
-(defvar imagex--original-size nil)
-(make-variable-buffer-local 'imagex--original-size)
-
 (define-minor-mode imagex-auto-adjust-mode
-  "Adjust image to current frame automatically in `image-mode'."
+  "Adjust image to current frame automatically in `image-mode'.
+
+TODO about restore original
+"
   :global t
   :group 'image+
-  (imagex--activate-advice
-   imagex-auto-adjust-mode imagex-auto-adjust-advices))
+  (let ((alist 
+         (mapcar
+          (lambda (fn)
+            (let* ((adname (intern (concat "imagex-" (symbol-name fn) "-ad")))
+                   (advice (ad-make-advice 
+                            adname nil nil
+                            `(advice lambda (&rest args) 
+                                     (imagex-auto-adjust-activate
+                                      (setq ad-return-value ad-do-it))))))
+              (ad-add-advice fn advice 'around nil)
+              (list fn adname)))
+          imagex-auto-adjust-advices)))
+    (imagex--activate-advice imagex-auto-adjust-mode alist)))
 
 (defvar imagex-auto-adjust-advices
   '(
-    (insert-image-file imagex-insert-image-file-ad)
-    (image-toggle-display-image imagex-image-toggle-display-image-ad)
+    insert-image-file
+    image-toggle-display-image
+    doc-view-insert-image
     ))
-
-(defadvice insert-image-file
-  (around imagex-insert-image-file-ad (&rest args) disable)
-  (imagex-auto-adjust-activate
-   (setq ad-return-value ad-do-it)))
-
-(defadvice image-toggle-display-image
-  (around imagex-image-toggle-display-image-ad (&rest args) disable)
-  (imagex-auto-adjust-activate
-   (setq ad-return-value ad-do-it)))
 
 (defmacro imagex-auto-adjust-activate (&rest body)
   "Execute BODY with activating `create-image' advice."
@@ -306,6 +336,10 @@
 
 
 
+;;;
+;;; image-dired extensions
+;;;
+
 (defvar imagex-dired-async-advices
   '(
     (image-dired-display-thumbs imagex-dired-display-thumbs)
@@ -328,19 +362,22 @@
           (imagex-dired--display-thumbs append do-not-pop))))
 
 (defun imagex-dired--display-thumbs (&optional append do-not-pop)
-  (let ((buf (image-dired-create-thumbnail-buffer))
-        (files (dired-get-marked-files))
-        (dired-buf (current-buffer)))
+  (let* ((buf (image-dired-create-thumbnail-buffer))
+         (dir (dired-current-directory))
+         (dired-buf (current-buffer))
+         (items (loop for f in (dired-get-marked-files)
+                      collect (list f dired-buf))))
     (with-current-buffer buf
       (let ((inhibit-read-only t))
         (unless append
           (erase-buffer)))
-      (imagex-dired--invoke-process files buf dired-buf))
+      (cd dir)
+      (imagex-dired--invoke-process items buf))
     (if do-not-pop
         (display-buffer image-dired-thumbnail-buffer)
       (pop-to-buffer image-dired-thumbnail-buffer))))
 
-;; FIXME duplicated from `image-dired-display-thumbs'
+;; NOTE: duplicated from `image-dired-display-thumbs'
 (defun imagex-dired--prepare-line-up ()
   (cond 
    ((eq 'dynamic image-dired-line-up-method)
@@ -354,26 +391,34 @@
    (t
     (image-dired-line-up-dynamic))))
 
-(defun imagex-dired--invoke-process (files thumb-buf dired-buf)
-  (when files
-    (let* ((curr-file (car files))
-           (thumb-name (image-dired-thumb-name curr-file)))
-      (flet ((call-process 
-              (program &optional infile buffer display &rest args)
-              (apply 'start-process "image-dired" nil program args)))
-        (let ((proc 
-               (if (file-exists-p thumb-name)
-                   ;;FIXME trick
-                   (start-process "image-dired trick" nil shell-file-name
-                                  shell-command-switch "")
-                 (image-dired-create-thumb curr-file thumb-name))))
-          (set-process-sentinel proc 'imagex-dired--thumb-process-sentinel)
-          (process-put proc 'thumb-name thumb-name)
-          (process-put proc 'curr-file curr-file)
-          (process-put proc 'dired-buf dired-buf)
-          (process-put proc 'thumb-buf thumb-buf)
-          (process-put proc 'files (cdr files))
-          proc)))))
+(defun imagex-dired--invoke-process (items thumb-buf)
+  (when items
+    (let* ((item (car items))
+           (curr-file (car item))
+           (dired-buf (cadr item))
+           (thumb-name (image-dired-thumb-name curr-file))
+           (caller-is-ad (ad-is-active 'call-process)))
+      (when caller-is-ad
+        (ad-deactivate 'call-process))
+      (unwind-protect
+          (flet ((call-process 
+                  (program &optional infile buffer display &rest args)
+                  (apply 'start-process "image-dired" nil program args)))
+            (let ((proc 
+                   (if (file-exists-p thumb-name)
+                       ;;FIXME trick for async
+                       (start-process "image-dired trick" nil shell-file-name
+                                      shell-command-switch "")
+                     (image-dired-create-thumb curr-file thumb-name))))
+              (set-process-sentinel proc 'imagex-dired--thumb-process-sentinel)
+              (process-put proc 'thumb-name thumb-name)
+              (process-put proc 'curr-file curr-file)
+              (process-put proc 'dired-buf dired-buf)
+              (process-put proc 'thumb-buf thumb-buf)
+              (process-put proc 'items (cdr items))
+              proc))
+        (when caller-is-ad
+          (ad-activate 'call-process))))))
 
 (defun imagex-dired--thumb-process-sentinel (proc event)
   (when (memq (process-status proc) '(exit signal))
@@ -381,23 +426,206 @@
           (curr-file (process-get proc 'curr-file))
           (dired-buf (process-get proc 'dired-buf))
           (thumb-buf (process-get proc 'thumb-buf))
-          (files (process-get proc 'files)))
-      (unwind-protect
-          (condition-case err
-              (if (and (not (file-exists-p thumb-name))
-                       (not (= 0 (process-exit-status proc))))
-                  (message "Thumb could not be created for file %s" curr-file)
-                (imagex-dired--thumb-insert thumb-buf thumb-name curr-file dired-buf))
-            (error (message "%s" err)))
-        (imagex-dired--invoke-process files thumb-buf dired-buf)))))
+          (items (process-get proc 'items)))
+      (when (buffer-live-p thumb-buf)
+        (unwind-protect
+            (condition-case err
+                (if (and (not (file-exists-p thumb-name))
+                         (not (= 0 (process-exit-status proc))))
+                    (message "Thumb could not be created for file %s" curr-file)
+                  (imagex-dired--thumb-insert thumb-buf thumb-name curr-file dired-buf))
+              (error (message "%s" err)))
+          (imagex-dired--invoke-process items thumb-buf))))))
 
 (defun imagex-dired--thumb-insert (buf thumb file dired)
-  (with-current-buffer (or buf (image-dired-create-thumbnail-buffer))
-    (save-excursion
+  (with-current-buffer buf
+    ;; save current point or filename
+    (let ((pf (image-dired-original-file-name))
+          (pp (point)))
+      (save-excursion
+        (let ((inhibit-read-only t))
+          (goto-char (point-max))
+          (image-dired-insert-thumbnail thumb file dired)
+          (imagex-dired--prepare-line-up)))
+      (cond 
+       (pf
+        (imagex-dired--goto-file pf))
+       (pp
+        (goto-char pp))))))
+
+(defun imagex-dired--goto-file (file)
+  (let ((point (save-excursion
+                 (goto-char (point-min))
+                 (condition-case nil
+                     (progn
+                       (while (not (equal file (image-dired-original-file-name)))
+                         (image-dired-forward-image))
+                       (point))
+                   (error nil)))))
+    (when point
+      (goto-char point))))
+
+(defun imagex-dired-next-line ()
+  "`image-dired-next-line' with preserve column"
+  (interactive)
+  (let ((left (imagex-dired--thumb-current-left)))
+    (image-dired-next-line)
+    (imagex-dired--thumb-goto-column left)))
+
+(defun imagex-dired-previous-line ()
+  "`image-dired-previous-line' with preserve column"
+  (interactive)
+  (let ((left (imagex-dired--thumb-current-left)))
+    (image-dired-previous-line)
+    (imagex-dired--thumb-goto-column left)))
+
+(defun imagex-dired--thumb-current-left ()
+  (save-excursion
+    (let ((first (point))
+          (acc 0))
+      (beginning-of-line)
+      (while (< (point) first)
+        (let* ((img (get-text-property (point) 'display))
+               (size (image-size img)))
+          (setq acc (+ acc
+                       (* (plist-get (cdr img) :margin) 2)
+                       (car size) )))
+        (image-dired-forward-image))
+      acc)))
+
+(defun imagex-dired--thumb-goto-column (tleft)
+  (let ((point
+         (save-excursion
+           (save-restriction
+             (narrow-to-region (line-beginning-position) (line-end-position))
+             (goto-char (point-min))
+             (let ((left 0)
+                   ;; diff between target and first column
+                   (diff tleft)
+                   hist)
+               (condition-case nil
+                   (while (or (null hist)
+                              (progn 
+                                (setq left (imagex-dired--thumb-current-left))
+                                (setq diff (abs (- tleft left)))
+                                ;; Break when incresing differences, 
+                                ;; this means obviously exceed target column
+                                (<= diff (caar hist))))
+                     (setq hist (cons (list diff (point)) hist))
+                     (image-dired-forward-image))
+                 (error nil))
+               (cond
+                ((null hist)
+                 (point))
+                ((or (null (cdr hist))
+                     (> (car (cadr hist)) (car (car hist))))
+                 (cadr (car hist)))
+                (t
+                 (cadr (cadr hist)))))))))
+        (goto-char point)))
+
+(defun imagex-dired--thumb-revert-buffer (&rest ignore)
+  (let* ((bufs (imagex-dired--associated-dired-buffers))
+         (items (loop for b in bufs
+                      if (buffer-live-p b)
+                      append (with-current-buffer b
+                               (loop for f in (dired-get-marked-files)
+                                     collect (list f b))))))
+    (let ((inhibit-read-only t))
+      (erase-buffer))
+    (imagex-dired--invoke-process items (current-buffer))))
+
+(defun imagex-dired--associated-dired-buffers ()
+  (save-excursion
+    (goto-char (point-min))
+    (let (res)
+      (condition-case nil
+          (while t
+            (let ((buf (image-dired-associated-dired-buffer)))
+              (unless (or (null buf) (memq buf res))
+                (setq res (cons buf res))))
+            (image-dired-forward-image))
+        (error nil))
+      (nreverse res))))
+
+(defun imagex-dired-flagged-delete ()
+  (interactive)
+  (let ((flagged 
+         (loop for buf in (imagex-dired--associated-dired-buffers)
+               append (with-current-buffer buf
+                        (let* ((dired-marker-char dired-del-marker)
+                               (files (dired-get-marked-files nil nil nil t)))
+                          (cond
+                           ;; selected NO file point of cursor filename
+                           ((= (length files) 1)
+                            nil)
+                           ((eq (car files) t)
+                            (cdr files))
+                           (t files)))))))
+    (cond
+     ((null flagged)
+      (message "(No deletions requested)"))
+     ((not (imagex-dired--confirm flagged))
+      (message "(No deletions performed)"))
+     (t
+      (loop with count = 0
+            with failures = '()
+            for f in flagged
+            do (condition-case err
+                   (progn
+                     (dired-delete-file f)
+                     (incf count)
+                     (imagex-dired--delete-entry f)
+                     (dired-fun-in-all-buffers
+                      (file-name-directory f) (file-name-nondirectory f)
+                      (function dired-delete-entry) f))
+                 (error
+                  (dired-log "%s\n" err)
+                  (setq failures (cons f failures))))
+            finally (if (not failures)
+                        (message "%d deletion%s done" count (dired-plural-s count))
+                      (dired-log-summary
+                       (format "%d of %d deletion%s failed"
+                               (length failures) count
+                               (dired-plural-s count))
+                       failures)))))))
+
+(defun imagex-dired--confirm (files)
+  (let ((thumbs (loop for f in files
+                      collect (let ((thumb (image-dired-thumb-name f)))
+                                (unless (file-exists-p thumb)
+                                  ;;TODO or insert only string?
+                                  (error "Thumbnail not created for %s" f))
+                                thumb))))
+    ;; same as dired.el
+    (with-current-buffer (get-buffer-create " *Deletions*")
       (let ((inhibit-read-only t))
-        (goto-char (point-max))
-        (image-dired-insert-thumbnail thumb file dired)
-        (imagex-dired--prepare-line-up)))))
+        (erase-buffer)
+        (setq truncate-lines t)
+        (loop for thumb in thumbs
+              do (insert-image (create-image 
+                                thumb nil nil 
+                                :relief image-dired-thumb-relief
+                                :margin image-dired-thumb-margin))))
+      (save-window-excursion
+        (dired-pop-to-buffer (current-buffer))
+        (funcall dired-deletion-confirmer "Delete image? ")))))
+
+(defun imagex-dired--delete-entry (file)
+  (save-excursion
+    (and (imagex-dired--goto-file file)
+         (let* ((region (imagex-get-image-region-at-point (point)))
+                (start (car region))
+                (end (cdr region))
+                (inhibit-read-only t))
+           (delete-region start end)))))
+
+(add-hook 'image-dired-thumbnail-mode-hook 
+          (lambda () 
+            (define-key image-dired-thumbnail-mode-map 
+              "x" 'imagex-dired-flagged-delete)
+            (set (make-variable-buffer-local 'revert-buffer-function)
+                 'imagex-dired--thumb-revert-buffer)))
 
 (provide 'image+)
 
