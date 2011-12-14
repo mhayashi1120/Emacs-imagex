@@ -120,6 +120,7 @@
 (defun imagex--replace-image (image new)
   ;;FIXME remove destructive set..
   (setcdr image (cdr new))
+  ;; suppress to make cyclic list.
   (when (eq image (plist-get (cdr image) 'imagex-original-image))
     (plist-put (cdr image) 'imagex-original-image nil)))
 
@@ -250,11 +251,14 @@ If there is no image, fallback to original command."
 (defun imagex-sticky-restore-original ()
   "Restore the original image if current image has been converted."
   (interactive)
-  (let* ((img (imagex-sticky--current-image))
-         (orig (plist-get (cdr img) 'imagex-original-image)))
-    (unless orig
-      (error "No original image here"))
-    (imagex--replace-image img orig)))
+  (condition-case nil
+      (let* ((img (imagex-sticky--current-image))
+             (orig (plist-get (cdr img) 'imagex-original-image)))
+        (unless orig
+          (error "No original image here"))
+        (imagex--replace-image img orig))
+    (error
+     (imagex-sticky-fallback this-command))))
 
 (defun imagex-sticky-rotate-left (&optional degrees)
   "Rotate current image left (counter clockwise) 90 degrees.
@@ -262,8 +266,11 @@ Use \\[universal-argument] followed by a number to specify a exactly degree.
 Multiple \\[universal-argument] as argument means to count of type multiply 
 by 90 degrees."
   (interactive "P")
-  (imagex-sticky--rotate-image 
-   (- 360 (imagex--rotate-degrees degrees))))
+  (condition-case nil
+      (imagex-sticky--rotate-image 
+       (- 360 (imagex--rotate-degrees degrees)))
+    (error
+     (imagex-sticky-fallback this-command))))
 
 (defun imagex-sticky-rotate-right (&optional degrees)
   "Rotate current image right (counter clockwise) 90 degrees.
@@ -271,17 +278,19 @@ Use \\[universal-argument] followed by a number to specify a exactly degree.
 Multiple \\[universal-argument] as argument means to count of type multiply 
 by 90 degrees."
   (interactive "P")
-  (imagex-sticky--rotate-image
-   (imagex--rotate-degrees degrees)))
+  (condition-case nil
+      (imagex-sticky--rotate-image
+       (imagex--rotate-degrees degrees))
+    (error
+     (imagex-sticky-fallback this-command))))
 
 (defun imagex--rotate-degrees (arg)
   (cond
    ((numberp arg)
     arg)
    ((consp arg)
-    (* (1+
-        (truncate 
-         (/ (log (prefix-numeric-value arg) 2) 2))) 90))
+    (* (truncate 
+        (/ (log (prefix-numeric-value arg) 2) 2)) 90))
    (t 90)))
 
 (defun imagex-sticky--rotate-image (degrees)
@@ -303,18 +312,16 @@ by 90 degrees."
     (let ((disp (get-text-property (point) 'display)))
       ;; only image object (Not sliced image)
       (and disp (consp disp) 
-           (eq (car disp) 'image))))))
+           (eq (car disp) 'image)
+           disp)))))
 
 (defun imagex-sticky--zoom (magnification)
   (condition-case nil
-      (imagex-sticky--zoom-internal magnification)
+      (let* ((image (imagex-sticky--current-image))
+             (new (imagex--zoom image magnification)))
+        (imagex--replace-image image new))
     (error
      (imagex-sticky-fallback this-command))))
-
-(defun imagex-sticky--zoom-internal (magnification)
-  (let* ((image (imagex-sticky--current-image))
-         (new (imagex--zoom image magnification)))
-    (imagex--replace-image image new)))
 
 
 
@@ -336,7 +343,7 @@ by 90 degrees."
 (define-minor-mode imagex-auto-adjust-mode
   "Adjust image to current frame automatically in `image-mode'.
 
-TODO about restore original
+Type \\[imagex-sticky-restore-original] to restore the original image.
 "
   :global t
   :group 'image+
