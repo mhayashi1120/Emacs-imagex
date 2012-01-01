@@ -141,13 +141,13 @@
                  (plist-get (cdr image) :relief)))
     new))
 
-(defun imagex--maximize (image)
+(defun imagex--maximize (image &optional maximum)
   "Adjust IMAGE to current frame."
   (let ((rect (let ((edges (window-inside-pixel-edges)))
                 (cons (nth 2 edges) (nth 3 edges)))))
-    (imagex--fit-to-size image (car rect) (cdr rect))))
+    (imagex--fit-to-size image (car rect) (cdr rect) maximum)))
 
-(defun imagex--fit-to-size (image width height)
+(defun imagex--fit-to-size (image width height &optional max)
   "Resize IMAGE with preserving magnification."
   (let* ((pixels (image-size image t))
          (margin (or (plist-get (cdr image) :margin) 0))
@@ -157,7 +157,7 @@
          (h (+ (cdr pixels) mr))
          (wr (/ width (ftruncate w)))
          (hr (/ height (ftruncate h)))
-         (magnification (min wr hr)))
+         (magnification (min wr hr max)))
     (imagex--zoom image magnification)))
 
 ;;
@@ -340,6 +340,11 @@ by 90 degrees."
 
 
 
+(defcustom imagex-auto-adjust-threshold 3
+  "*Maximum magnification when `imagex-auto-adjust-mode' is on.
+"
+  :group 'image+)
+
 (define-minor-mode imagex-auto-adjust-mode
   "Adjust image to current frame automatically in `image-mode'.
 
@@ -392,7 +397,7 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
     (if (boundp 'imagex-adjusting)
         img
       (let ((imagex-adjusting t))
-        (imagex--maximize img)))))
+        (imagex--maximize img imagex-auto-adjust-threshold)))))
 
 
 
