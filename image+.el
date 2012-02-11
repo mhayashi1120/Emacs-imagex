@@ -43,7 +43,7 @@
 ;; * Adjusted image when open image file.
 ;;
 ;;  M-x imagex-auto-adjust-mode
-;; 
+;;
 ;;  TODO image-file-mode, doc-view-mode, any major mode has image
 ;;
 ;; * Asynchronous `image-dired'
@@ -92,7 +92,7 @@
             (error "Cannot convert image")))
          ((plist-get spec :file)
           ;; stdin to current-buffer
-          (unless (eq (apply 'call-process 
+          (unless (eq (apply 'call-process
                              imagex-convert-command
                              (plist-get spec :file) t nil
                              `(,@args "-" "-")) 0)
@@ -100,18 +100,18 @@
          (t
           (error "Not a supported image")))
         (let ((img (create-image (buffer-string) nil t)))
-          (plist-put (cdr img) 'imagex-original-image 
+          (plist-put (cdr img) 'imagex-original-image
                      (or (plist-get (cdr image) 'imagex-original-image)
                          (copy-sequence image)))
           img)))))
 
 (defun imagex-get-image-region-at-point (point)
   (let ((image (get-text-property point 'display)))
-    (when (and image (listp image) 
+    (when (and image (listp image)
                (eq (car image) 'image))
       (let ((start (previous-single-property-change point 'display)))
         ;; consider edge of start image
-        (when (or (null start) 
+        (when (or (null start)
                   (not (eq image (get-text-property start 'display))))
           (setq start point))
         (let ((end (or (next-single-property-change point 'display) (point-max))))
@@ -126,18 +126,18 @@
 
 (defun imagex--zoom (image magnification)
   (let* ((pixels (image-size image t))
-         (new (imagex--call-convert 
-               image 
-               "-resize" 
+         (new (imagex--call-convert
+               image
+               "-resize"
                (format "%sx%s"
                        (truncate (* (car pixels) magnification))
                        (truncate (* (cdr pixels) magnification))))))
     ;; clone source image properties
     (when (plist-get (cdr image) :margin)
-      (plist-put (cdr new) :margin 
+      (plist-put (cdr new) :margin
                  (plist-get (cdr image) :margin)))
     (when (plist-get (cdr image) :relief)
-      (plist-put (cdr new) :relief 
+      (plist-put (cdr new) :relief
                  (plist-get (cdr image) :relief)))
     new))
 
@@ -175,7 +175,7 @@
   (define-key map "\C-c\em" 'imagex-sticky-maximize)
   (define-key map "\C-c\eo" 'imagex-sticky-restore-original)
   (define-key map "\C-c\C-x\C-s" 'imagex-sticky-save-image)
-  
+
   (setq imagex-sticky-mode-map map))
 
 (define-minor-mode imagex-sticky-mode
@@ -185,7 +185,7 @@
   )
 
 (define-globalized-minor-mode imagex-global-sticky-mode
-  imagex-sticky-mode imagex-sticky-mode-maybe 
+  imagex-sticky-mode imagex-sticky-mode-maybe
   :group 'image+)
 
 (defun imagex-sticky-mode-maybe ()
@@ -263,11 +263,11 @@ If there is no image, fallback to original command."
 (defun imagex-sticky-rotate-left (&optional degrees)
   "Rotate current image left (counter clockwise) 90 degrees.
 Use \\[universal-argument] followed by a number to specify a exactly degree.
-Multiple \\[universal-argument] as argument means to count of type multiply 
+Multiple \\[universal-argument] as argument means to count of type multiply
 by 90 degrees."
   (interactive "P")
   (condition-case nil
-      (imagex-sticky--rotate-image 
+      (imagex-sticky--rotate-image
        (- 360 (imagex--rotate-degrees degrees)))
     (error
      (imagex-sticky-fallback this-command))))
@@ -275,7 +275,7 @@ by 90 degrees."
 (defun imagex-sticky-rotate-right (&optional degrees)
   "Rotate current image right (counter clockwise) 90 degrees.
 Use \\[universal-argument] followed by a number to specify a exactly degree.
-Multiple \\[universal-argument] as argument means to count of type multiply 
+Multiple \\[universal-argument] as argument means to count of type multiply
 by 90 degrees."
   (interactive "P")
   (condition-case nil
@@ -289,14 +289,14 @@ by 90 degrees."
    ((numberp arg)
     arg)
    ((consp arg)
-    (* (truncate 
+    (* (truncate
         (/ (log (prefix-numeric-value arg) 2) 2)) 90))
    (t 90)))
 
 (defun imagex-sticky--rotate-image (degrees)
   (condition-case nil
       (let* ((image (imagex-sticky--current-image))
-             (new (imagex--call-convert 
+             (new (imagex--call-convert
                    image  "-rotate" (format "%s" degrees))))
         (imagex--replace-image image new))
     (error
@@ -311,7 +311,7 @@ by 90 degrees."
    (t
     (let ((disp (get-text-property (point) 'display)))
       ;; only image object (Not sliced image)
-      (and disp (consp disp) 
+      (and disp (consp disp)
            (eq (car disp) 'image)
            disp)))))
 
@@ -330,7 +330,7 @@ by 90 degrees."
    (lambda (p)
      (condition-case nil
          (progn
-           (funcall (if flag 
+           (funcall (if flag
                         'ad-enable-advice
                       'ad-disable-advice)
                     (car p) 'around (cadr p))
@@ -352,13 +352,13 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
 "
   :global t
   :group 'image+
-  (let ((alist 
+  (let ((alist
          (mapcar
           (lambda (fn)
             (let* ((adname (intern (concat "imagex-" (symbol-name fn) "-ad")))
-                   (advice (ad-make-advice 
+                   (advice (ad-make-advice
                             adname nil nil
-                            `(advice lambda (&rest args) 
+                            `(advice lambda (&rest args)
                                      (imagex-auto-adjust-activate
                                       (setq ad-return-value ad-do-it))))))
               (ad-add-advice fn advice 'around nil)
@@ -385,12 +385,12 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
 
 (defadvice create-image
   (around imagex-create-image (&rest args) disable)
-  (setq ad-return-value 
+  (setq ad-return-value
         (apply 'imagex-create-adjusted-image args)))
 
-(defun imagex-create-adjusted-image 
+(defun imagex-create-adjusted-image
   (file-or-data &optional type data-p &rest props)
-  (let ((img 
+  (let ((img
          (apply (ad-get-orig-definition 'create-image)
                 file-or-data type data-p props)))
     ;; suppress eternal recurse
