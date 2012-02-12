@@ -401,7 +401,8 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
            (let ((imagex-adjusting t))
              (imagex--maximize img imagex-auto-adjust-threshold))
          (error
-          (message "%s" err)
+          (message "image+: %s" err)
+          (sit-for 0.5)
           nil))
        img))))
 
