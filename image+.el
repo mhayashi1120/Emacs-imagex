@@ -396,8 +396,14 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
     ;; suppress eternal recurse
     (if (boundp 'imagex-adjusting)
         img
-      (let ((imagex-adjusting t))
-        (imagex--maximize img imagex-auto-adjust-threshold)))))
+      (or
+       (condition-case err
+           (let ((imagex-adjusting t))
+             (imagex--maximize img imagex-auto-adjust-threshold))
+         (error
+          (message "%s" err)
+          nil))
+       img))))
 
 
 
