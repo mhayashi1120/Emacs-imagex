@@ -4,7 +4,7 @@
 ;; Keywords: image extensions
 ;; URL: http://github.com/mhayashi1120/Emacs-imagex/raw/master/image+.el
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.5.3
+;; Version: 0.5.4
 
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -80,7 +80,12 @@
     (with-temp-buffer
       (set-buffer-multibyte nil)
       (let ((coding-system-for-read 'binary)
-            (coding-system-for-write 'binary))
+            (coding-system-for-write 'binary)
+            (default-directory 
+              (or
+               (and temporary-file-directory
+                    (file-name-as-directory temporary-file-directory))
+               default-directory)))
         (cond
          ((plist-get spec :data)
           (insert (plist-get spec :data))
@@ -401,6 +406,7 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
            (let ((imagex-adjusting t))
              (imagex--maximize img imagex-auto-adjust-threshold))
          (error
+          ;; handling error that is caused by ImageMagick unsupported image.
           (message "image+: %s" err)
           (sit-for 0.5)
           nil))
