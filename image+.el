@@ -4,7 +4,7 @@
 ;; Keywords: image extensions
 ;; URL: http://github.com/mhayashi1120/Emacs-imagex/raw/master/image+.el
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.5.4
+;; Version: 0.5.5
 
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -46,10 +46,6 @@
 ;;
 ;;  TODO image-file-mode, doc-view-mode, any major mode has image
 ;;
-;; * Asynchronous `image-dired'
-;;
-;;  M-x imagex-dired-async-mode
-
 ;;; TODO:
 
 ;; * show original image.
@@ -81,7 +77,7 @@
       (set-buffer-multibyte nil)
       (let ((coding-system-for-read 'binary)
             (coding-system-for-write 'binary)
-            (default-directory 
+            (default-directory
               (or
                (and temporary-file-directory
                     (file-name-as-directory temporary-file-directory))
@@ -123,11 +119,32 @@
           (cons start end))))))
 
 (defun imagex--replace-image (image new)
-  ;;FIXME remove destructive set..
-  (setcdr image (cdr new))
+  (cond
+   ((plist-get (cdr new) :file)
+    (plist-put (cdr image) :file (plist-get (cdr new) :file))
+    (imagex--remove-property (cdr image) :data))
+   ((plist-get (cdr new) :data)
+    (plist-put (cdr image) :data (plist-get (cdr new) :data))
+    (imagex--remove-property (cdr image) :file)))
   ;; suppress to make cyclic list.
   (when (eq image (plist-get (cdr image) 'imagex-original-image))
     (plist-put (cdr image) 'imagex-original-image nil)))
+
+;;FIXME property value contain PROP key
+(defun imagex--remove-property (plist prop)
+  (let ((new (loop for p on plist by 'cddr
+                   unless (eq (car p) prop)
+                   append (list (car p) (cadr p)))))
+    (loop with prev
+          for p1 on plist by 'cddr
+          for p2 on new by 'cddr
+          do (progn
+               (setcar p1 (car p2))
+               (setcar (cdr p1) (cadr p2))
+               (setq prev p1))
+          finally (when prev
+                    (setcdr (cdr prev) nil)))
+    plist))
 
 (defun imagex--zoom (image magnification)
   (let* ((pixels (image-size image t))
@@ -331,17 +348,33 @@ by 90 degrees."
 
 
 (defun imagex--activate-advice (flag alist)
-  (mapc
-   (lambda (p)
-     (condition-case nil
-         (progn
-           (funcall (if flag
-                        'ad-enable-advice
-                      'ad-disable-advice)
-                    (car p) 'around (cadr p))
-           (ad-activate (car p)))
-       (error nil)))
-   alist))
+  (loop for (fn adname) in alist
+        do (condition-case nil
+               (progn
+                 (funcall (if flag
+                              'ad-enable-advice
+                            'ad-disable-advice)
+                          fn 'around adname)
+                 (ad-activate fn))
+             (error nil))))
+
+;; adjust current image
+(defun imagex--adjust-image-to-window ()
+  (when (and (not (minibufferp))
+             imagex-auto-adjust-mode)
+    (let ((image (imagex-sticky--current-image)))
+      (when image
+        (let ((prev-edges (plist-get (cdr image) 'imagex-auto-adjusted-edges))
+              (curr-edges (window-edges)))
+          (when (and prev-edges
+                     (not (equal curr-edges prev-edges)))
+            (let* ((orig (plist-get (cdr image) 'imagex-original-image))
+                   (target (or orig image))
+                   (new-image
+                    (imagex--maximize target imagex-auto-adjust-threshold)))
+              (imagex--replace-image image new-image)
+              (plist-put (cdr image)
+                         'imagex-auto-adjusted-edges curr-edges))))))))
 
 
 
@@ -369,7 +402,13 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
               (ad-add-advice fn advice 'around nil)
               (list fn adname)))
           imagex-auto-adjust-advices)))
-    (imagex--activate-advice imagex-auto-adjust-mode alist)))
+    (imagex--activate-advice imagex-auto-adjust-mode alist)
+    ;;TODO make local hook
+    (if imagex-auto-adjust-mode
+        (add-hook 'window-configuration-change-hook
+                  'imagex--adjust-image-to-window)
+      (remove-hook 'window-configuration-change-hook
+                   'imagex--adjust-image-to-window))))
 
 (defvar imagex-auto-adjust-advices
   '(
@@ -398,11 +437,14 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
   (let ((img
          (apply (ad-get-orig-definition 'create-image)
                 file-or-data type data-p props)))
-    ;; suppress eternal recurse
-    (if (boundp 'imagex-adjusting)
-        img
+    (cond
+     ((boundp 'imagex-adjusting)
+      (plist-put (cdr img) 'imagex-auto-adjusted-edges (window-edges))
+      img)
+     (t
       (or
        (condition-case err
+           ;; suppress eternal recurse
            (let ((imagex-adjusting t))
              (imagex--maximize img imagex-auto-adjust-threshold))
          (error
@@ -410,7 +452,7 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
           (message "image+: %s" err)
           (sit-for 0.5)
           nil))
-       img))))
+       img)))))
 
 
 
