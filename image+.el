@@ -69,6 +69,11 @@
   :group 'image+
   :type 'file)
 
+(defcustom imagex-identify-command "identify"
+  "ImageMagick identify command"
+  :group 'image+
+  :type 'file)
+
 (defvar this-command)
 
 (defun imagex--call-convert (image &rest args)
@@ -211,8 +216,9 @@
   :group 'image+)
 
 (defun imagex-sticky-mode-maybe ()
-  (unless (minibufferp (current-buffer))
-    (imagex-sticky-mode 1)))
+  (when (executable-find imagex-convert-command)
+    (unless (minibufferp (current-buffer))
+      (imagex-sticky-mode 1))))
 
 (defun imagex-sticky-fallback (&optional except-command)
   (let ((keys (this-command-keys-vector)))
