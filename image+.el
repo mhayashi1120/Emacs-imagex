@@ -171,7 +171,8 @@
 (defun imagex--maximize (image &optional maximum)
   "Adjust IMAGE to current frame."
   (let ((rect (let ((edges (window-inside-pixel-edges)))
-                (cons (nth 2 edges) (nth 3 edges)))))
+                (cons (- (nth 2 edges) (nth 0 edges))
+                      (- (nth 3 edges) (nth 1 edges))))))
     (imagex--fit-to-size image (car rect) (cdr rect) maximum)))
 
 (defun imagex--fit-to-size (image width height &optional max)
@@ -372,8 +373,8 @@ by 90 degrees."
       (when image
         (let ((prev-edges (plist-get (cdr image) 'imagex-auto-adjusted-edges))
               (curr-edges (window-edges)))
-          (when (and prev-edges
-                     (not (equal curr-edges prev-edges)))
+          (when (or (null prev-edges)
+                    (not (equal curr-edges prev-edges)))
             (let* ((orig (plist-get (cdr image) 'imagex-original-image))
                    (target (or orig image))
                    (new-image
