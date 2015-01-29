@@ -4,7 +4,7 @@
 ;; Keywords: multimedia, extensions
 ;; URL: http://github.com/mhayashi1120/Emacs-imagex/raw/master/image+.el
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.5.6
+;; Version: 0.5.7
 
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -21,7 +21,9 @@
 ;; Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 ;; Boston, MA 02110-1301, USA.
 
-;;; Install:
+;;; Commentary:
+
+;; ## Install:
 
 ;; Please install the ImageMagick before installing this elisp.
 
@@ -30,25 +32,19 @@
 ;;
 ;;     (require 'image+)
 
-;;; Usage:
+;; ## Usage:
 
 ;; * To manupulate a image under cursor.
 ;;
-;;  M-x imagex-global-sticky-mode
+;;     M-x imagex-global-sticky-mode
 ;;
-;; * C-c + / C-c -: Zoom in/out image.
-;; * C-c M-m: Adjust image to current frame size.
-;; * C-c C-x C-s: Save current image.
+;; * `C-c +` / `C-c -`: Zoom in/out image.
+;; * `C-c M-m`: Adjust image to current frame size.
+;; * `C-c C-x C-s`: Save current image.
 ;;
 ;; * Adjusted image when open image file.
 ;;
-;;  M-x imagex-auto-adjust-mode
-;;
-;;  TODO image-file-mode, doc-view-mode, any major mode has image
-;;
-;;; TODO:
-
-;; * show original image.
+;;     M-x imagex-auto-adjust-mode
 
 ;;; Code:
 
