@@ -71,6 +71,12 @@
   :type 'file)
 
 (defvar this-command)
+(defvar imagex-auto-adjust-mode)
+
+(defcustom imagex-auto-adjust-threshold 3
+  "*Maximum magnification when `imagex-auto-adjust-mode' is on.
+"
+  :group 'image+)
 
 (defun imagex--call-convert (image &rest args)
   (let ((spec (cdr image)))
@@ -166,9 +172,9 @@
 
 (defun imagex--maximize (image &optional maximum)
   "Adjust IMAGE to current frame."
-  (let ((rect (let ((edges (window-inside-pixel-edges)))
-                (cons (- (nth 2 edges) (nth 0 edges))
-                      (- (nth 3 edges) (nth 1 edges))))))
+  (let* ((edges (window-inside-pixel-edges))
+         (rect (cons (- (nth 2 edges) (nth 0 edges))
+                     (- (nth 3 edges) (nth 1 edges)))))
     (imagex--fit-to-size image (car rect) (cdr rect) maximum)))
 
 (defun imagex--fit-to-size (image width height &optional max)
@@ -327,6 +333,9 @@ by 90 degrees."
     (error
      (imagex-sticky-fallback this-command))))
 
+(declare-function image-get-display-property nil)
+(declare-function doc-view-current-image nil)
+
 (defun imagex-sticky--current-image ()
   (cond
    ((derived-mode-p 'image-mode)
@@ -381,10 +390,12 @@ by 90 degrees."
 
 
 
-(defcustom imagex-auto-adjust-threshold 3
-  "*Maximum magnification when `imagex-auto-adjust-mode' is on.
-"
-  :group 'image+)
+(defvar imagex-auto-adjust-advices
+  '(
+    insert-image-file
+    image-toggle-display-image
+    doc-view-insert-image
+    ))
 
 (define-minor-mode imagex-auto-adjust-mode
   "Adjust image to current frame automatically in `image-mode'.
@@ -412,13 +423,6 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
                   'imagex--adjust-image-to-window)
       (remove-hook 'window-configuration-change-hook
                    'imagex--adjust-image-to-window))))
-
-(defvar imagex-auto-adjust-advices
-  '(
-    insert-image-file
-    image-toggle-display-image
-    doc-view-insert-image
-    ))
 
 (defmacro imagex-auto-adjust-activate (&rest body)
   "Execute BODY with activating `create-image' advice."
