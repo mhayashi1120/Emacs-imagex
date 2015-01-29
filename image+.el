@@ -4,7 +4,7 @@
 ;; Keywords: multimedia, extensions
 ;; URL: http://github.com/mhayashi1120/Emacs-imagex/raw/master/image+.el
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.5.7
+;; Version: 0.5.8
 
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -41,6 +41,8 @@
 ;; * `C-c +` / `C-c -`: Zoom in/out image.
 ;; * `C-c M-m`: Adjust image to current frame size.
 ;; * `C-c C-x C-s`: Save current image.
+;; * `C-c M-r` / `C-c M-l`: Rotate image.
+;; * `C-c M-o`: Show image `image+` have not modified.
 ;;
 ;; * Adjusted image when open image file.
 ;;

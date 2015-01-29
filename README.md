@@ -23,6 +23,8 @@ M-x imagex-global-sticky-mode
 * `C-c +` / `C-c -`: Zoom in/out image.
 * `C-c M-m`: Adjust image to current frame size.
 * `C-c C-x C-s`: Save current image.
+* `C-c M-r` / `C-c M-l`: Rotate image.
+* `C-c M-o`: Show image `image+` have not modified.
 
 * Adjusted image when open image file.
 
