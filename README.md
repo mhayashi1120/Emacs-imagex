@@ -32,3 +32,15 @@ M-x imagex-global-sticky-mode
 M-x imagex-auto-adjust-mode
 ```
 
+* To activate some image manipulation function at point.
+
+```
+M-x imagex-sticky-mode
+```
+
+ Or
+
+```
+M-x imagex-global-sticky-mode
+```
+
