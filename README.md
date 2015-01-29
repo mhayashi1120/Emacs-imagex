@@ -9,7 +9,7 @@ Put this file into load-path'ed directory, and byte compile it if
 desired. And put the following expression into your ~/.emacs.
 
 ```
-(require 'image+)
+(eval-after-load 'image '(require 'image+))
 ```
 
 ## Usage:
@@ -17,7 +17,19 @@ desired. And put the following expression into your ~/.emacs.
 * To manupulate a image under cursor.
 
 ```
+M-x imagex-sticky-mode
+```
+
+ Or
+
+```
 M-x imagex-global-sticky-mode
+```
+
+ Or in .emacs
+
+```
+(eval-after-load 'image+ '(imagex-global-sticky-mode 1))
 ```
 
 * `C-c +` / `C-c -`: Zoom in/out image.
@@ -32,15 +44,9 @@ M-x imagex-global-sticky-mode
 M-x imagex-auto-adjust-mode
 ```
 
-* To activate some image manipulation function at point.
+  Or in .emacs
 
 ```
-M-x imagex-sticky-mode
-```
-
- Or
-
-```
-M-x imagex-global-sticky-mode
+(eval-after-load 'image+ '(imagex-auto-adjust-mode 1))
 ```
 
