@@ -215,12 +215,14 @@
 
     (setq imagex-sticky-mode-map map)))
 
+;;;###autoload
 (define-minor-mode imagex-sticky-mode
   "To manipulate Image at point."
   :group 'image+
   :keymap imagex-sticky-mode-map
   )
 
+;;;###autoload
 (define-globalized-minor-mode imagex-global-sticky-mode
   imagex-sticky-mode imagex-sticky-mode-maybe
   :group 'image+)
@@ -402,6 +404,7 @@ by 90 degrees."
     doc-view-insert-image
     ))
 
+;;;###autoload
 (define-minor-mode imagex-auto-adjust-mode
   "Adjust image to current frame automatically in `image-mode'.
 
