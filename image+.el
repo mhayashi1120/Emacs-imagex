@@ -185,7 +185,7 @@
          (h (+ (cdr pixels) mr))
          (wr (/ width (ftruncate w)))
          (hr (/ height (ftruncate h)))
-         (magnification (min wr hr max)))
+         (magnification (min wr hr (or max wr))))
     (imagex--zoom image magnification)))
 
 ;;
