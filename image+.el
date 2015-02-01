@@ -4,7 +4,7 @@
 ;; Keywords: multimedia, extensions
 ;; URL: http://github.com/mhayashi1120/Emacs-imagex/raw/master/image+.el
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.5.6
+;; Version: 0.5.9
 
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -21,34 +21,44 @@
 ;; Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 ;; Boston, MA 02110-1301, USA.
 
-;;; Install:
+;;; Commentary:
+
+;; ## Install:
 
 ;; Please install the ImageMagick before installing this elisp.
 
 ;; Put this file into load-path'ed directory, and byte compile it if
 ;; desired. And put the following expression into your ~/.emacs.
-;;
-;;     (require 'image+)
 
-;;; Usage:
+;;     (eval-after-load 'image '(require 'image+))
+
+;; ## Usage:
 
 ;; * To manupulate a image under cursor.
-;;
-;;  M-x imagex-global-sticky-mode
-;;
-;; * C-c + / C-c -: Zoom in/out image.
-;; * C-c M-m: Adjust image to current frame size.
-;; * C-c C-x C-s: Save current image.
-;;
-;; * Adjusted image when open image file.
-;;
-;;  M-x imagex-auto-adjust-mode
-;;
-;;  TODO image-file-mode, doc-view-mode, any major mode has image
-;;
-;;; TODO:
 
-;; * show original image.
+;;     M-x imagex-sticky-mode
+
+;;  Or to activate globally:
+
+;;     M-x imagex-global-sticky-mode
+
+;;  Or in .emacs:
+
+;;     (eval-after-load 'image+ '(imagex-global-sticky-mode 1))
+
+;; * `C-c +` / `C-c -`: Zoom in/out image.
+;; * `C-c M-m`: Adjust image to current frame size.
+;; * `C-c C-x C-s`: Save current image.
+;; * `C-c M-r` / `C-c M-l`: Rotate image.
+;; * `C-c M-o`: Show image `image+` have not modified.
+
+;; * Adjusted image when open image file.
+
+;;     M-x imagex-auto-adjust-mode
+
+;;   Or in .emacs:
+
+;;     (eval-after-load 'image+ '(imagex-auto-adjust-mode 1))
 
 ;;; Code:
 
@@ -75,6 +85,12 @@
   :type 'file)
 
 (defvar this-command)
+(defvar imagex-auto-adjust-mode)
+
+(defcustom imagex-auto-adjust-threshold 3
+  "*Maximum magnification when `imagex-auto-adjust-mode' is on.
+"
+  :group 'image+)
 
 (defun imagex--call-convert (image &rest args)
   (let ((spec (cdr image)))
@@ -123,6 +139,9 @@
         (let ((end (or (next-single-property-change point 'display) (point-max))))
           (cons start end))))))
 
+(defun imagex--maybe-redisplay-image ()
+  (redraw-frame (selected-frame)))
+
 (defun imagex--replace-image (image new)
   (cond
    ((plist-get (cdr new) :file)
@@ -131,6 +150,7 @@
    ((plist-get (cdr new) :data)
     (plist-put (cdr image) :data (plist-get (cdr new) :data))
     (imagex--remove-property (cdr image) :file)))
+  (imagex--maybe-redisplay-image)
   ;; suppress to make cyclic list.
   (when (eq image (plist-get (cdr image) 'imagex-original-image))
     (plist-put (cdr image) 'imagex-original-image nil)))
@@ -152,30 +172,30 @@
     plist))
 
 (defun imagex--zoom (image magnification)
-  (let* ((pixels (image-size image t))
-         (new (imagex--call-convert
-               image
-               "-resize"
-               (format "%sx%s"
-                       (truncate (* (car pixels) magnification))
-                       (truncate (* (cdr pixels) magnification))))))
-    ;; clone source image properties
-    (when (plist-get (cdr image) :margin)
-      (plist-put (cdr new) :margin
-                 (plist-get (cdr image) :margin)))
-    (when (plist-get (cdr image) :relief)
-      (plist-put (cdr new) :relief
-                 (plist-get (cdr image) :relief)))
-    new))
+  (condition-case nil
+      (let* ((pixels (image-size image t))
+             (new (imagex--call-convert
+                   image
+                   "-resize"
+                   (format "%sx%s"
+                           (truncate (* (car pixels) magnification))
+                           (truncate (* (cdr pixels) magnification))))))
+        ;; clone source image properties
+        (when (plist-get (cdr image) :margin)
+          (plist-put (cdr new) :margin
+                     (plist-get (cdr image) :margin)))
+        (when (plist-get (cdr image) :relief)
+          (plist-put (cdr new) :relief
+                     (plist-get (cdr image) :relief)))
+        new)
+    (error nil)))
 
 (defun imagex--maximize (image &optional maximum)
   "Adjust IMAGE to current frame."
-  (let ((rect (let ((edges (window-inside-pixel-edges)))
-                (cons (- (nth 2 edges) (nth 0 edges))
-                      (- (nth 3 edges) (nth 1 edges))))))
-    (condition-case nil
-        (imagex--fit-to-size image (car rect) (cdr rect) maximum)
-      (error nil))))
+  (let* ((edges (window-inside-pixel-edges))
+         (width (- (nth 2 edges) (nth 0 edges)))
+         (height (- (nth 3 edges) (nth 1 edges))))
+    (imagex--fit-to-size image width height maximum)))
 
 (defun imagex--fit-to-size (image width height &optional max)
   "Resize IMAGE with preserving magnification."
@@ -196,24 +216,27 @@
 
 (defvar imagex-sticky-mode-map nil)
 
-(let ((map (or imagex-sticky-mode-map (make-sparse-keymap))))
+(unless imagex-sticky-mode-map
+  (let ((map (make-sparse-keymap)))
 
-  (define-key map "\C-c+" 'imagex-sticky-zoom-in)
-  (define-key map "\C-c-" 'imagex-sticky-zoom-out)
-  (define-key map "\C-c\el" 'imagex-sticky-rotate-left)
-  (define-key map "\C-c\er" 'imagex-sticky-rotate-right)
-  (define-key map "\C-c\em" 'imagex-sticky-maximize)
-  (define-key map "\C-c\eo" 'imagex-sticky-restore-original)
-  (define-key map "\C-c\C-x\C-s" 'imagex-sticky-save-image)
+    (define-key map "\C-c+" 'imagex-sticky-zoom-in)
+    (define-key map "\C-c-" 'imagex-sticky-zoom-out)
+    (define-key map "\C-c\el" 'imagex-sticky-rotate-left)
+    (define-key map "\C-c\er" 'imagex-sticky-rotate-right)
+    (define-key map "\C-c\em" 'imagex-sticky-maximize)
+    (define-key map "\C-c\eo" 'imagex-sticky-restore-original)
+    (define-key map "\C-c\C-x\C-s" 'imagex-sticky-save-image)
 
-  (setq imagex-sticky-mode-map map))
+    (setq imagex-sticky-mode-map map)))
 
+;;;###autoload
 (define-minor-mode imagex-sticky-mode
   "To manipulate Image at point."
   :group 'image+
   :keymap imagex-sticky-mode-map
   )
 
+;;;###autoload
 (define-globalized-minor-mode imagex-global-sticky-mode
   imagex-sticky-mode imagex-sticky-mode-maybe
   :group 'image+)
@@ -232,6 +255,23 @@
                  (not (eq command except-command)))
         (setq this-command command)
         (call-interactively command)))))
+
+(defun imagex-sticky--rotate-image (degrees)
+  (condition-case nil
+      (let* ((image (imagex-sticky--current-image))
+             (new (imagex--call-convert
+                   image "-rotate" (format "%s" degrees))))
+        (imagex--replace-image image new))
+    (error
+     (imagex-sticky-fallback this-command))))
+
+(defun imagex-sticky--zoom (magnification)
+  (condition-case nil
+      (let* ((image (imagex-sticky--current-image))
+             (new (imagex--zoom image magnification)))
+        (imagex--replace-image image new))
+    (error
+     (imagex-sticky-fallback this-command))))
 
 (defun imagex-sticky-zoom-in (&optional arg)
   "Zoom in image at point.
@@ -297,11 +337,8 @@ Use \\[universal-argument] followed by a number to specify a exactly degree.
 Multiple \\[universal-argument] as argument means to count of type multiply
 by 90 degrees."
   (interactive "P")
-  (condition-case nil
-      (imagex-sticky--rotate-image
-       (- 360 (imagex--rotate-degrees degrees)))
-    (error
-     (imagex-sticky-fallback this-command))))
+  (imagex-sticky--rotate-image
+   (- 360 (imagex--rotate-degrees degrees))))
 
 (defun imagex-sticky-rotate-right (&optional degrees)
   "Rotate current image right (counter clockwise) 90 degrees.
@@ -309,11 +346,8 @@ Use \\[universal-argument] followed by a number to specify a exactly degree.
 Multiple \\[universal-argument] as argument means to count of type multiply
 by 90 degrees."
   (interactive "P")
-  (condition-case nil
-      (imagex-sticky--rotate-image
-       (imagex--rotate-degrees degrees))
-    (error
-     (imagex-sticky-fallback this-command))))
+  (imagex-sticky--rotate-image
+   (imagex--rotate-degrees degrees)))
 
 (defun imagex--rotate-degrees (arg)
   (cond
@@ -324,14 +358,11 @@ by 90 degrees."
         (/ (log (prefix-numeric-value arg) 2) 2)) 90))
    (t 90)))
 
-(defun imagex-sticky--rotate-image (degrees)
-  (condition-case nil
-      (let* ((image (imagex-sticky--current-image))
-             (new (imagex--call-convert
-                   image  "-rotate" (format "%s" degrees))))
-        (imagex--replace-image image new))
-    (error
-     (imagex-sticky-fallback this-command))))
+(defun imagex-one-image-mode-p ()
+  (memq major-mode '(image-mode doc-view-mode)))
+
+(declare-function image-get-display-property nil)
+(declare-function doc-view-current-image nil)
 
 (defun imagex-sticky--current-image ()
   (cond
@@ -346,14 +377,6 @@ by 90 degrees."
            (eq (car disp) 'image)
            disp)))))
 
-(defun imagex-sticky--zoom (magnification)
-  (condition-case nil
-      (let* ((image (imagex-sticky--current-image))
-             (new (imagex--zoom image magnification)))
-        (imagex--replace-image image new))
-    (error
-     (imagex-sticky-fallback this-command))))
-
 
 
 (defun imagex--activate-advice (flag alist)
@@ -367,10 +390,11 @@ by 90 degrees."
                  (ad-activate fn))
              (error nil))))
 
-;; adjust current image
+;; adjust image fit to window if window has just one image
 (defun imagex--adjust-image-to-window ()
   (when (and (not (minibufferp))
-             imagex-auto-adjust-mode)
+             imagex-auto-adjust-mode
+             (imagex-one-image-mode-p))
     (let ((image (imagex-sticky--current-image)))
       (when image
         (let ((prev-edges (plist-get (cdr image) 'imagex-auto-adjusted-edges))
@@ -387,11 +411,14 @@ by 90 degrees."
 
 
 
-(defcustom imagex-auto-adjust-threshold 3
-  "*Maximum magnification when `imagex-auto-adjust-mode' is on.
-"
-  :group 'image+)
+(defvar imagex-auto-adjust-advices
+  '(
+    insert-image-file
+    image-toggle-display-image
+    doc-view-insert-image
+    ))
 
+;;;###autoload
 (define-minor-mode imagex-auto-adjust-mode
   "Adjust image to current frame automatically in `image-mode'.
 
@@ -412,19 +439,18 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
               (list fn adname)))
           imagex-auto-adjust-advices)))
     (imagex--activate-advice imagex-auto-adjust-mode alist)
-    ;;TODO make local hook
-    (if imagex-auto-adjust-mode
-        (add-hook 'window-configuration-change-hook
-                  'imagex--adjust-image-to-window)
+    ;;TODO want make local hook but seems `window-configuration-change-hook'
+    ;; is not working locally.
+    (cond
+     (imagex-auto-adjust-mode
+      (add-hook 'window-configuration-change-hook
+                'imagex--adjust-image-to-window)
+      ;; maybe replace current displaying image
+      (imagex--adjust-image-to-window))
+     (t
+      ;; No need to restore originals
       (remove-hook 'window-configuration-change-hook
-                   'imagex--adjust-image-to-window))))
-
-(defvar imagex-auto-adjust-advices
-  '(
-    insert-image-file
-    image-toggle-display-image
-    doc-view-insert-image
-    ))
+                   'imagex--adjust-image-to-window)))))
 
 (defmacro imagex-auto-adjust-activate (&rest body)
   "Execute BODY with activating `create-image' advice."

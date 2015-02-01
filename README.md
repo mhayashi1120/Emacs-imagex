@@ -1,33 +1,52 @@
-image+.el --- Image manupulation extensions for Emacs
-================================================
+image+.el
+=========
 
-Install
-=======
+## Install:
 
 Please install the ImageMagick before installing this elisp.
 
 Put this file into load-path'ed directory, and byte compile it if
 desired. And put the following expression into your ~/.emacs.
 
-(require 'image+)
+```
+(eval-after-load 'image '(require 'image+))
+```
 
-Functions
-=========
+## Usage:
 
-* M-x imagex-global-sticky-mode
+* To manupulate a image under cursor.
 
-Or put the following expression into your ~/.emacs.
+```
+M-x imagex-sticky-mode
+```
 
-(imagex-global-sticky-mode 1)
+ Or
 
-This allows you to manupulate image at point.
+```
+M-x imagex-global-sticky-mode
+```
 
-* M-x imagex-auto-adjust-mode
+ Or in .emacs
 
-TODO about auto-image-file-mode
+```
+(eval-after-load 'image+ '(imagex-global-sticky-mode 1))
+```
 
-Or put the following expression into your ~/.emacs.
+* `C-c +` / `C-c -`: Zoom in/out image.
+* `C-c M-m`: Adjust image to current frame size.
+* `C-c C-x C-s`: Save current image.
+* `C-c M-r` / `C-c M-l`: Rotate image.
+* `C-c M-o`: Show image `image+` have not modified.
 
-(imagex-auto-adjust-mode 1)
+* Adjusted image when open image file.
 
-This cause `auto-image-file-mode'
+```
+M-x imagex-auto-adjust-mode
+```
+
+  Or in .emacs
+
+```
+(eval-after-load 'image+ '(imagex-auto-adjust-mode 1))
+```
+
