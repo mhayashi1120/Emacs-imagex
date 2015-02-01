@@ -173,7 +173,9 @@
   (let ((rect (let ((edges (window-inside-pixel-edges)))
                 (cons (- (nth 2 edges) (nth 0 edges))
                       (- (nth 3 edges) (nth 1 edges))))))
-    (imagex--fit-to-size image (car rect) (cdr rect) maximum)))
+    (condition-case nil
+        (imagex--fit-to-size image (car rect) (cdr rect) maximum)
+      (error nil))))
 
 (defun imagex--fit-to-size (image width height &optional max)
   "Resize IMAGE with preserving magnification."
