@@ -207,6 +207,15 @@
          (magnification (min wr hr (or max wr))))
     (imagex--zoom image magnification)))
 
+(defun imagex--rotate-degrees (arg)
+  (cond
+   ((numberp arg)
+    arg)
+   ((consp arg)
+    (* (truncate
+        (/ (log (prefix-numeric-value arg) 2) 2)) 90))
+   (t 90)))
+
 ;;
 ;; Image+ Minor mode definitions
 ;;
@@ -347,15 +356,6 @@ by 90 degrees."
   (interactive "P")
   (imagex-sticky--rotate-image
    (imagex--rotate-degrees degrees)))
-
-(defun imagex--rotate-degrees (arg)
-  (cond
-   ((numberp arg)
-    arg)
-   ((consp arg)
-    (* (truncate
-        (/ (log (prefix-numeric-value arg) 2) 2)) 90))
-   (t 90)))
 
 (defun imagex-one-image-mode-p ()
   (memq major-mode '(image-mode doc-view-mode)))
