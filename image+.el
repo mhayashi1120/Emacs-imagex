@@ -127,6 +127,7 @@
                          (copy-sequence image)))
           img)))))
 
+;;TODO not used locally
 (defun imagex-get-image-region-at-point (point)
   (let ((image (get-text-property point 'display)))
     (when (and image (listp image)
