@@ -4,7 +4,7 @@
 ;; Keywords: multimedia, extensions
 ;; URL: http://github.com/mhayashi1120/Emacs-imagex/raw/master/image+.el
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.5.9
+;; Version: 0.6.0
 
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -129,21 +129,29 @@
 
 ;;TODO not used locally
 (defun imagex-get-image-region-at-point (point)
-  (imagex--display-region point))
+  (destructuring-bind (begin end)
+      (imagex--display-region point)
+    (cons begin end)))
 
-(defun imagex--replace-image (new-image)
+(defun imagex--replace-image (start end image)
+  (let ((flag (buffer-modified-p))
+        (inhibit-read-only t))
+    (put-text-property start end 'display image)
+    (set-buffer-modified-p flag)))
+
+(defun imagex--replace-current-image (new-image)
   (cond
    ((derived-mode-p 'image-mode)
-    (destructuring-bind (begin . end)
-        (imagex-get-image-region-at-point (point-min))
-      (put-text-property begin end 'display new-image)))
+    (destructuring-bind (begin end)
+        (imagex--display-region (point-min))
+      (imagex--replace-image begin end new-image)))
    ((derived-mode-p 'doc-view-mode)
     (let ((ov (car (overlays-in (point-min) (point-max)))))
       (overlay-put ov 'display new-image)))
    (t
-    (destructuring-bind (begin . end)
-        (imagex-get-image-region-at-point (point))
-      (put-text-property begin end 'display new-image)))))
+    (destructuring-bind (begin end)
+        (imagex--display-region (point))
+      (imagex--replace-image begin end new-image)))))
 
 (defun imagex--zoom (image magnification)
   (condition-case nil
@@ -246,8 +254,7 @@
       (destructuring-bind (image begin end)
           (imagex-sticky--current-display)
         (let ((new (funcall proc image)))
-          (let ((inhibit-read-only t))
-            (put-text-property begin end 'display new))))
+          (imagex--replace-image begin end new)))
     (error
      (imagex-sticky-fallback this-command))))
 
@@ -313,7 +320,8 @@ If there is no image, fallback to original command."
    (lambda (image)
      (let ((orig (plist-get (cdr image) 'imagex-original-image)))
        (unless orig
-         (error "No original image here"))))))
+         (error "No original image here"))
+       orig))))
 
 (defun imagex-sticky-rotate-left (&optional degrees)
   "Rotate current image left (counter clockwise) 90 degrees.
@@ -357,14 +365,14 @@ by 90 degrees."
                   (point-max)))
          (begin (or (previous-single-property-change end 'display)
                     (point-min))))
-    (cons begin end)))
+    (list begin end)))
 
 (defun imagex-sticky--current-display ()
   (let ((disp (get-text-property (point) 'display)))
     ;; only image object (Not sliced image)
     (when (and disp (consp disp)
                (eq (car disp) 'image))
-      (destructuring-bind (begin . end)
+      (destructuring-bind (begin end)
           (imagex--display-region (point))
         (list disp begin end)))))
 
@@ -396,7 +404,7 @@ by 90 degrees."
                    (target (or orig image))
                    (new-image
                     (imagex--maximize target imagex-auto-adjust-threshold)))
-              (imagex--replace-image new-image)
+              (imagex--replace-current-image new-image)
               (plist-put (cdr new-image)
                          'imagex-auto-adjusted-edges curr-edges))))))))
 
