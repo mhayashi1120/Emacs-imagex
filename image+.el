@@ -172,21 +172,23 @@
     plist))
 
 (defun imagex--zoom (image magnification)
-  (let* ((pixels (image-size image t))
-         (new (imagex--call-convert
-               image
-               "-resize"
-               (format "%sx%s"
-                       (truncate (* (car pixels) magnification))
-                       (truncate (* (cdr pixels) magnification))))))
-    ;; clone source image properties
-    (when (plist-get (cdr image) :margin)
-      (plist-put (cdr new) :margin
-                 (plist-get (cdr image) :margin)))
-    (when (plist-get (cdr image) :relief)
-      (plist-put (cdr new) :relief
-                 (plist-get (cdr image) :relief)))
-    new))
+  (condition-case nil
+      (let* ((pixels (image-size image t))
+             (new (imagex--call-convert
+                   image
+                   "-resize"
+                   (format "%sx%s"
+                           (truncate (* (car pixels) magnification))
+                           (truncate (* (cdr pixels) magnification))))))
+        ;; clone source image properties
+        (when (plist-get (cdr image) :margin)
+          (plist-put (cdr new) :margin
+                     (plist-get (cdr image) :margin)))
+        (when (plist-get (cdr image) :relief)
+          (plist-put (cdr new) :relief
+                     (plist-get (cdr image) :relief)))
+        new)
+    (error nil)))
 
 (defun imagex--maximize (image &optional maximum)
   "Adjust IMAGE to current frame."
@@ -205,7 +207,7 @@
          (h (+ (cdr pixels) mr))
          (wr (/ width (ftruncate w)))
          (hr (/ height (ftruncate h)))
-         (magnification (min wr hr max)))
+         (magnification (min wr hr (or max wr))))
     (imagex--zoom image magnification)))
 
 ;;
