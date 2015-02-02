@@ -139,9 +139,6 @@
         (let ((end (or (next-single-property-change point 'display) (point-max))))
           (cons start end))))))
 
-(defun imagex--maybe-redisplay-image ()
-  (redraw-frame (selected-frame)))
-
 (defun imagex--replace-image (image new)
   (cond
    ((plist-get (cdr new) :file)
@@ -150,7 +147,6 @@
    ((plist-get (cdr new) :data)
     (plist-put (cdr image) :data (plist-get (cdr new) :data))
     (imagex--remove-property (cdr image) :file)))
-  (imagex--maybe-redisplay-image)
   ;; suppress to make cyclic list.
   (when (eq image (plist-get (cdr image) 'imagex-original-image))
     (plist-put (cdr image) 'imagex-original-image nil)))
