@@ -246,6 +246,7 @@
     (unless (minibufferp (current-buffer))
       (imagex-sticky-mode 1))))
 
+;;TODO make obsolete
 (defun imagex-sticky-fallback (&optional except-command)
   (let ((keys (this-command-keys-vector)))
     ;; suppress this minor mode to get original command
@@ -256,22 +257,27 @@
         (setq this-command command)
         (call-interactively command)))))
 
-(defun imagex-sticky--rotate-image (degrees)
+;;TODO rename
+(defun imagex-sticky--filter-image (proc)
   (condition-case nil
-      (let* ((image (imagex-sticky--current-image))
-             (new (imagex--call-convert
-                   image "-rotate" (format "%s" degrees))))
-        (imagex--replace-image image new))
+      (let ((info (imagex-sticky--current-display)))
+        (destructuring-bind (image begin end) info
+          (let ((new (funcall proc image)))
+            (let ((inhibit-read-only t))
+              (put-text-property begin end 'display new)))))
     (error
      (imagex-sticky-fallback this-command))))
 
+(defun imagex-sticky--rotate-image (degrees)
+  (imagex-sticky--filter-image
+   (lambda (image)
+     (imagex--call-convert
+      image "-rotate" (format "%s" degrees)))))
+
 (defun imagex-sticky--zoom (magnification)
-  (condition-case nil
-      (let* ((image (imagex-sticky--current-image))
-             (new (imagex--zoom image magnification)))
-        (imagex--replace-image image new))
-    (error
-     (imagex-sticky-fallback this-command))))
+  (imagex-sticky--filter-image
+   (lambda (image)
+     (imagex--zoom image magnification))))
 
 (defun imagex-sticky-zoom-in (&optional arg)
   "Zoom in image at point.
@@ -290,46 +296,42 @@ If there is no image, fallback to original command."
 If there is no image, fallback to original command."
   (interactive)
   (condition-case nil
-      (let* ((image (imagex-sticky--current-image))
-             (spec (cdr image)))
-        (cond
-         ((plist-get spec :file)
-          (let* ((src-file (plist-get spec :file))
-                 (ext (concat "." (symbol-name (image-type src-file nil))))
-                 (file (read-file-name "Image File: " nil nil nil ext)))
-            (let ((coding-system-for-write 'binary))
-              (copy-file src-file file t))))
-         ((plist-get spec :data)
-          (let* ((data (plist-get spec :data))
-                 (ext (concat "." (symbol-name (image-type data nil t))))
-                 (file (read-file-name "Image File: " nil nil nil ext)))
-            (let ((coding-system-for-write 'binary))
-              (write-region data nil file))))
-         (t (error "Abort"))))
+      ;;TODO should not imagex--current-image
+      (let ((info (imagex-sticky--current-display)))
+        (destructuring-bind (image _ _) info
+          (let ((spec (cdr image)))
+            (cond
+             ((plist-get spec :file)
+              (let* ((src-file (plist-get spec :file))
+                     (ext (concat "." (symbol-name (image-type src-file nil))))
+                     (file (read-file-name "Image File: " nil nil nil ext)))
+                (let ((coding-system-for-write 'binary))
+                  (copy-file src-file file t))))
+             ((plist-get spec :data)
+              (let* ((data (plist-get spec :data))
+                     (ext (concat "." (symbol-name (image-type data nil t))))
+                     (file (read-file-name "Image File: " nil nil nil ext)))
+                (let ((coding-system-for-write 'binary))
+                  (write-region data nil file))))
+             (t (error "Abort"))))))
     (error
      (imagex-sticky-fallback this-command))))
 
 (defun imagex-sticky-maximize ()
   "Maximize the point image to fit the current frame."
   (interactive)
-  (condition-case nil
-      (let* ((image (imagex-sticky--current-image))
-             (new-image (imagex--maximize image)))
-        (imagex--replace-image image new-image))
-    (error
-     (imagex-sticky-fallback this-command))))
+  (imagex-sticky--filter-image
+   (lambda (image)
+     (imagex--maximize image))))
 
 (defun imagex-sticky-restore-original ()
   "Restore the original image if current image has been converted."
   (interactive)
-  (condition-case nil
-      (let* ((img (imagex-sticky--current-image))
-             (orig (plist-get (cdr img) 'imagex-original-image)))
-        (unless orig
-          (error "No original image here"))
-        (imagex--replace-image img orig))
-    (error
-     (imagex-sticky-fallback this-command))))
+  (imagex-sticky--filter-image
+   (lambda (image)
+     (let ((orig (plist-get (cdr image) 'imagex-original-image)))
+       (unless orig
+         (error "No original image here"))))))
 
 (defun imagex-sticky-rotate-left (&optional degrees)
   "Rotate current image left (counter clockwise) 90 degrees.
@@ -364,7 +366,7 @@ by 90 degrees."
 (declare-function image-get-display-property nil)
 (declare-function doc-view-current-image nil)
 
-(defun imagex-sticky--current-image ()
+(defun imagex--current-image ()
   (cond
    ((derived-mode-p 'image-mode)
     (image-get-display-property))
@@ -376,6 +378,17 @@ by 90 degrees."
       (and disp (consp disp)
            (eq (car disp) 'image)
            disp)))))
+
+(defun imagex-sticky--current-display ()
+  (let ((disp (get-text-property (point) 'display)))
+    ;; only image object (Not sliced image)
+    (when (and disp (consp disp)
+               (eq (car disp) 'image))
+      (let* ((end (or (next-single-property-change (point) 'display)
+                      (point-max)))
+             (begin (or (previous-single-property-change end 'display)
+                        (point-min))))
+        (list disp begin end)))))
 
 
 
@@ -395,7 +408,7 @@ by 90 degrees."
   (when (and (not (minibufferp))
              imagex-auto-adjust-mode
              (imagex-one-image-mode-p))
-    (let ((image (imagex-sticky--current-image)))
+    (let ((image (imagex--current-image)))
       (when image
         (let ((prev-edges (plist-get (cdr image) 'imagex-auto-adjusted-edges))
               (curr-edges (window-edges)))
