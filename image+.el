@@ -243,11 +243,11 @@
 ;;TODO rename
 (defun imagex-sticky--filter-image (proc)
   (condition-case nil
-      (let ((info (imagex-sticky--current-display)))
-        (destructuring-bind (image begin end) info
-          (let ((new (funcall proc image)))
-            (let ((inhibit-read-only t))
-              (put-text-property begin end 'display new)))))
+      (destructuring-bind (image begin end)
+          (imagex-sticky--current-display)
+        (let ((new (funcall proc image)))
+          (let ((inhibit-read-only t))
+            (put-text-property begin end 'display new))))
     (error
      (imagex-sticky-fallback this-command))))
 
@@ -279,23 +279,23 @@ If there is no image, fallback to original command."
 If there is no image, fallback to original command."
   (interactive)
   (condition-case nil
-      (let ((info (imagex-sticky--current-display)))
-        (destructuring-bind (image _ _) info
-          (let ((spec (cdr image)))
-            (cond
-             ((plist-get spec :file)
-              (let* ((src-file (plist-get spec :file))
-                     (ext (concat "." (symbol-name (image-type src-file nil))))
-                     (file (read-file-name "Image File: " nil nil nil ext)))
-                (let ((coding-system-for-write 'binary))
-                  (copy-file src-file file t))))
-             ((plist-get spec :data)
-              (let* ((data (plist-get spec :data))
-                     (ext (concat "." (symbol-name (image-type data nil t))))
-                     (file (read-file-name "Image File: " nil nil nil ext)))
-                (let ((coding-system-for-write 'binary))
-                  (write-region data nil file))))
-             (t (error "Abort"))))))
+      (destructuring-bind (image _ _)
+          (imagex-sticky--current-display)
+        (let ((spec (cdr image)))
+          (cond
+           ((plist-get spec :file)
+            (let* ((src-file (plist-get spec :file))
+                   (ext (concat "." (symbol-name (image-type src-file nil))))
+                   (file (read-file-name "Image File: " nil nil nil ext)))
+              (let ((coding-system-for-write 'binary))
+                (copy-file src-file file t))))
+           ((plist-get spec :data)
+            (let* ((data (plist-get spec :data))
+                   (ext (concat "." (symbol-name (image-type data nil t))))
+                   (file (read-file-name "Image File: " nil nil nil ext)))
+              (let ((coding-system-for-write 'binary))
+                (write-region data nil file))))
+           (t (error "Abort")))))
     (error
      (imagex-sticky-fallback this-command))))
 
