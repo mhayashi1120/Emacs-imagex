@@ -129,44 +129,21 @@
 
 ;;TODO not used locally
 (defun imagex-get-image-region-at-point (point)
-  (let ((image (get-text-property point 'display)))
-    (when (and image (listp image)
-               (eq (car image) 'image))
-      (let ((start (previous-single-property-change point 'display)))
-        ;; consider edge of start image
-        (when (or (null start)
-                  (not (eq image (get-text-property start 'display))))
-          (setq start point))
-        (let ((end (or (next-single-property-change point 'display) (point-max))))
-          (cons start end))))))
+  (imagex--display-region point))
 
-(defun imagex--replace-image (image new)
+(defun imagex--replace-image (new-image)
   (cond
-   ((plist-get (cdr new) :file)
-    (plist-put (cdr image) :file (plist-get (cdr new) :file))
-    (imagex--remove-property (cdr image) :data))
-   ((plist-get (cdr new) :data)
-    (plist-put (cdr image) :data (plist-get (cdr new) :data))
-    (imagex--remove-property (cdr image) :file)))
-  ;; suppress to make cyclic list.
-  (when (eq image (plist-get (cdr image) 'imagex-original-image))
-    (plist-put (cdr image) 'imagex-original-image nil)))
-
-;;FIXME property value contain PROP key
-(defun imagex--remove-property (plist prop)
-  (let ((new (loop for p on plist by 'cddr
-                   unless (eq (car p) prop)
-                   append (list (car p) (cadr p)))))
-    (loop with prev
-          for p1 on plist by 'cddr
-          for p2 on new by 'cddr
-          do (progn
-               (setcar p1 (car p2))
-               (setcar (cdr p1) (cadr p2))
-               (setq prev p1))
-          finally (when prev
-                    (setcdr (cdr prev) nil)))
-    plist))
+   ((derived-mode-p 'image-mode)
+    (destructuring-bind (begin . end)
+        (imagex-get-image-region-at-point (point-min))
+      (put-text-property begin end 'display new-image)))
+   ((derived-mode-p 'doc-view-mode)
+    (let ((ov (car (overlays-in (point-min) (point-max)))))
+      (overlay-put ov 'display new-image)))
+   (t
+    (destructuring-bind (begin . end)
+        (imagex-get-image-region-at-point (point))
+      (put-text-property begin end 'display new-image)))))
 
 (defun imagex--zoom (image magnification)
   (condition-case nil
@@ -302,7 +279,6 @@ If there is no image, fallback to original command."
 If there is no image, fallback to original command."
   (interactive)
   (condition-case nil
-      ;;TODO should not imagex--current-image
       (let ((info (imagex-sticky--current-display)))
         (destructuring-bind (image _ _) info
           (let ((spec (cdr image)))
@@ -376,15 +352,20 @@ by 90 degrees."
            (eq (car disp) 'image)
            disp)))))
 
+(defun imagex--display-region (point)
+  (let* ((end (or (next-single-property-change point 'display)
+                  (point-max)))
+         (begin (or (previous-single-property-change end 'display)
+                    (point-min))))
+    (cons begin end)))
+
 (defun imagex-sticky--current-display ()
   (let ((disp (get-text-property (point) 'display)))
     ;; only image object (Not sliced image)
     (when (and disp (consp disp)
                (eq (car disp) 'image))
-      (let* ((end (or (next-single-property-change (point) 'display)
-                      (point-max)))
-             (begin (or (previous-single-property-change end 'display)
-                        (point-min))))
+      (destructuring-bind (begin . end)
+          (imagex--display-region (point))
         (list disp begin end)))))
 
 
@@ -415,8 +396,8 @@ by 90 degrees."
                    (target (or orig image))
                    (new-image
                     (imagex--maximize target imagex-auto-adjust-threshold)))
-              (imagex--replace-image image new-image)
-              (plist-put (cdr image)
+              (imagex--replace-image new-image)
+              (plist-put (cdr new-image)
                          'imagex-auto-adjusted-edges curr-edges))))))))
 
 
