@@ -61,14 +61,18 @@
 
 ;;     (eval-after-load 'image+ '(imagex-auto-adjust-mode 1))
 
-;; * TODO Sample Hydra setting
+;; * Sample Hydra setting
 ;;  https://github.com/abo-abo/hydra
 ;;
 ;;     (eval-after-load 'image+
 ;;       `(when (require 'hydra nil t)
 ;;          (hydra-create "C-x C-l" imagex-hydra-default-heads)))
+;;
+;;  Then try to type `C-x C-l +` to zoom-in.
 
-;; * TODO imagex-quiet-error
+;; * If you do not want error message in minibuffer:
+
+;;     (setq imagex-quiet-error t)
 
 ;;; Code:
 
@@ -142,12 +146,6 @@
                      (or (plist-get (cdr image) 'imagex-original-image)
                          (copy-sequence image)))
           img)))))
-
-;;TODO not used locally
-(defun imagex-get-image-region-at-point (point)
-  (cl-destructuring-bind (begin end)
-      (imagex--display-region point)
-    (cons begin end)))
 
 (defun imagex-image-object-p (object)
   (and object (consp object)

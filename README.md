@@ -20,13 +20,13 @@ desired. And put the following expression into your ~/.emacs.
 M-x imagex-sticky-mode
 ```
 
- Or
+ Or to activate globally:
 
 ```
 M-x imagex-global-sticky-mode
 ```
 
- Or in .emacs
+ Or in .emacs:
 
 ```
 (eval-after-load 'image+ '(imagex-global-sticky-mode 1))
@@ -44,9 +44,26 @@ M-x imagex-global-sticky-mode
 M-x imagex-auto-adjust-mode
 ```
 
-  Or in .emacs
+  Or in .emacs:
 
 ```
 (eval-after-load 'image+ '(imagex-auto-adjust-mode 1))
+```
+
+* Sample Hydra setting
+ https://github.com/abo-abo/hydra
+
+```
+(eval-after-load 'image+
+  `(when (require 'hydra nil t)
+     (hydra-create "C-x C-l" imagex-hydra-default-heads)))
+```
+
+ Then try to type `C-x C-l +` to zoom-in.
+
+* If you do not want error message in minibuffer:
+
+```
+(setq imagex-quiet-error t)
 ```
 
