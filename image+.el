@@ -68,7 +68,8 @@
 ;;       `(when (require 'hydra nil t)
 ;;          (hydra-create "C-x C-l" imagex-hydra-default-heads)))
 ;;
-;;  Then try to type `C-x C-l +` to zoom-in.
+;;  Then try to type `C-x C-l +` to zoom-in the current image.
+;;  You can zoom-out with type `-` .
 
 ;; * If you do not want error message in minibuffer:
 
