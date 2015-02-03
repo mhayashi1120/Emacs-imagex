@@ -172,15 +172,6 @@
         new)
     (error nil)))
 
-(defun imagex--maximize (image &optional maximum)
-  "Adjust IMAGE to current frame."
-  (let* ((edges (window-inside-pixel-edges))
-         (width (- (nth 2 edges) (nth 0 edges)))
-         (height (- (nth 3 edges) (nth 1 edges))))
-    (condition-case nil
-        (imagex--fit-to-size image width height maximum)
-      (error nil))))
-
 (defun imagex--fit-to-size (image width height &optional max)
   "Resize IMAGE with preserving magnification."
   (let* ((pixels (image-size image t))
@@ -191,8 +182,17 @@
          (h (+ (cdr pixels) mr))
          (wr (/ width (ftruncate w)))
          (hr (/ height (ftruncate h)))
-         (magnification (min wr hr (or max wr))))
+         (magnification (apply 'min (delq nil (list wr hr max)))))
     (imagex--zoom image magnification)))
+
+(defun imagex--maximize (image &optional maximum)
+  "Adjust IMAGE to current frame."
+  (let* ((edges (window-inside-pixel-edges))
+         (width (- (nth 2 edges) (nth 0 edges)))
+         (height (- (nth 3 edges) (nth 1 edges))))
+    (condition-case nil
+        (imagex--fit-to-size image width height maximum)
+      (error nil))))
 
 (defun imagex--rotate-degrees (arg)
   (cond
@@ -251,23 +251,23 @@
         (call-interactively command)))))
 
 ;;TODO rename
-(defun imagex-sticky--filter-image (proc)
+(defun imagex-sticky--convert-image (converter)
   (condition-case nil
       (destructuring-bind (image begin end)
           (imagex-sticky--current-display)
-        (let ((new (funcall proc image)))
+        (let ((new (funcall converter image)))
           (imagex--replace-image begin end new)))
     (error
      (imagex-sticky-fallback this-command))))
 
 (defun imagex-sticky--rotate-image (degrees)
-  (imagex-sticky--filter-image
+  (imagex-sticky--convert-image
    (lambda (image)
      (imagex--call-convert
       image "-rotate" (format "%s" degrees)))))
 
 (defun imagex-sticky--zoom (magnification)
-  (imagex-sticky--filter-image
+  (imagex-sticky--convert-image
    (lambda (image)
      (imagex--zoom image magnification))))
 
@@ -311,14 +311,14 @@ If there is no image, fallback to original command."
 (defun imagex-sticky-maximize ()
   "Maximize the point image to fit the current frame."
   (interactive)
-  (imagex-sticky--filter-image
+  (imagex-sticky--convert-image
    (lambda (image)
      (imagex--maximize image))))
 
 (defun imagex-sticky-restore-original ()
   "Restore the original image if current image has been converted."
   (interactive)
-  (imagex-sticky--filter-image
+  (imagex-sticky--convert-image
    (lambda (image)
      (let ((orig (plist-get (cdr image) 'imagex-original-image)))
        (unless orig
