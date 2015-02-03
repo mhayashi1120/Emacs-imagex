@@ -289,10 +289,10 @@
                    (lambda (ov) (overlay-get ov 'display))
                    ovs))))
     (when (and ov (overlay-get ov 'display))
-      (setq disp (overlay-get ov 'display))
-      ;; only image object (Not sliced image)
-      (and (imagex-image-object-p disp)
-           (list disp ov)))))
+      (let ((disp (overlay-get ov 'display)))
+        ;; only image object (Not sliced image)
+        (and (imagex-image-object-p disp)
+             (list disp ov))))))
 
 ;;TODO make obsolete use hydra
 (defun imagex-sticky-fallback (&optional except-command)
