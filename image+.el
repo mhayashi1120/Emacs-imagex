@@ -239,7 +239,7 @@
     (unless (minibufferp (current-buffer))
       (imagex-sticky-mode 1))))
 
-;;TODO make obsolete
+;;TODO make obsolete use hydra
 (defun imagex-sticky-fallback (&optional except-command)
   (let ((keys (this-command-keys-vector)))
     ;; suppress this minor mode to get original command
@@ -250,7 +250,6 @@
         (setq this-command command)
         (call-interactively command)))))
 
-;;TODO rename
 (defun imagex-sticky--convert-image (converter)
   (condition-case nil
       (destructuring-bind (image begin end)
