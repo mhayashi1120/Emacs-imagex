@@ -68,6 +68,8 @@
 ;;       `(when (require 'hydra nil t)
 ;;          (hydra-create "C-x C-l" imagex-hydra-default-heads)))
 
+;; * TODO imagex-quiet-error
+
 ;;; Code:
 
 (eval-when-compile
@@ -96,9 +98,15 @@
 (defvar imagex-auto-adjust-mode)
 
 (defcustom imagex-auto-adjust-threshold 3
-  "*Maximum magnification when `imagex-auto-adjust-mode' is on.
-"
-  :group 'image+)
+  "Maximum magnification when `imagex-auto-adjust-mode' is on."
+  :group 'image+
+  :type 'number)
+
+(defcustom imagex-quiet-error nil
+  "Suppress error message when convert image."
+  :group 'imagex
+  :type 'boolean)
+
 
 (defun imagex--call-convert (image &rest args)
   (let ((spec (cdr image)))
@@ -230,9 +238,7 @@
   (let* ((edges (window-inside-pixel-edges))
          (width (- (nth 2 edges) (nth 0 edges)))
          (height (- (nth 3 edges) (nth 1 edges))))
-    (condition-case nil
-        (imagex--fit-to-size image width height maximum)
-      (error nil))))
+    (imagex--fit-to-size image width height maximum)))
 
 (defun imagex--rotate-degrees (arg)
   (cond
@@ -245,6 +251,11 @@
 
 (defun imagex-one-image-mode-p ()
   (memq major-mode '(image-mode doc-view-mode)))
+
+(defun imagex--message (format &rest args)
+  (unless imagex-quiet-error
+    (apply 'message (concat "image+: " format) args)
+    (sit-for 0.5)))
 
 ;;
 ;; Image+ Minor mode definitions
@@ -443,22 +454,24 @@ by 90 degrees."
   (when (and (not (minibufferp))
              imagex-auto-adjust-mode
              (imagex-one-image-mode-p))
-    (let ((image (imagex--current-image)))
-      (when image
-        (let ((prev-edges (plist-get (cdr image) 'imagex-auto-adjusted-edges))
-              (curr-edges (window-edges)))
-          (when (or (null prev-edges)
-                    (not (equal curr-edges prev-edges)))
-            (let* ((orig (plist-get (cdr image) 'imagex-original-image))
-                   (target (or orig image))
-                   (new-image
-                    (imagex--maximize target imagex-auto-adjust-threshold)))
-              ;; new-image may be nil if original image file was removed
-              (when new-image
-                (imagex--replace-current-image new-image)
-                (plist-put (cdr new-image)
-                           'imagex-auto-adjusted-edges curr-edges)))))))))
-
+    (condition-case err
+        (let ((image (imagex--current-image)))
+          (when image
+            (let ((prev-edges (plist-get (cdr image) 'imagex-auto-adjusted-edges))
+                  (curr-edges (window-edges)))
+              (when (or (null prev-edges)
+                        (not (equal curr-edges prev-edges)))
+                (let* ((orig (plist-get (cdr image) 'imagex-original-image))
+                       (target (or orig image))
+                       (new-image
+                        (imagex--maximize target imagex-auto-adjust-threshold)))
+                  ;; new-image may be nil if original image file was removed
+                  (when new-image
+                    (imagex--replace-current-image new-image)
+                    (plist-put (cdr new-image)
+                               'imagex-auto-adjusted-edges curr-edges)))))))
+      (error
+       (imagex--message "%s" err)))))
 
 
 (defvar imagex-auto-adjust-advices
@@ -529,8 +542,7 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
              (imagex--maximize img imagex-auto-adjust-threshold))
          (error
           ;; handling error that is caused by ImageMagick unsupported image.
-          (message "image+: %s" err)
-          (sit-for 0.5)
+          (imagex--message "%s" err)
           nil))
        img)))))
 
