@@ -392,6 +392,7 @@ by 90 degrees."
              (error nil))))
 
 ;; adjust image fit to window if window has just one image
+;; this function is invoked from `imagex-auto-adjust-mode'
 (defun imagex--adjust-image-to-window ()
   (when (and (not (minibufferp))
              imagex-auto-adjust-mode
@@ -406,9 +407,11 @@ by 90 degrees."
                    (target (or orig image))
                    (new-image
                     (imagex--maximize target imagex-auto-adjust-threshold)))
-              (imagex--replace-current-image new-image)
-              (plist-put (cdr new-image)
-                         'imagex-auto-adjusted-edges curr-edges))))))))
+              ;; new-image may be nil if original image file was removed
+              (when new-image
+                (imagex--replace-current-image new-image)
+                (plist-put (cdr new-image)
+                           'imagex-auto-adjusted-edges curr-edges)))))))))
 
 
 
