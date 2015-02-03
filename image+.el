@@ -313,7 +313,8 @@ Sample:
         (and (imagex-image-object-p disp)
              (list disp ov))))))
 
-;;TODO make obsolete use hydra
+;; fallback to original keybind
+;; if current point doesn't have image.
 (defun imagex-sticky-fallback (&optional except-command)
   (let ((keys (this-command-keys-vector)))
     ;; suppress this minor mode to get original command
@@ -368,8 +369,8 @@ If there is no image, fallback to original command."
   (interactive)
   (condition-case nil
       (cl-destructuring-bind (image . _)
-          (or (imagex-sticky--current-textprop-display)
-              (imagex-sticky--current-ovprop-display))
+          (or (imagex-sticky--current-ovprop-display)
+              (imagex-sticky--current-textprop-display))
         (let ((spec (cdr image)))
           (cond
            ((plist-get spec :file)
