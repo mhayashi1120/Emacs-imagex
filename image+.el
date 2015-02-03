@@ -5,6 +5,7 @@
 ;; URL: http://github.com/mhayashi1120/Emacs-imagex/raw/master/image+.el
 ;; Emacs: GNU Emacs 22 or later
 ;; Version: 0.6.0
+;; Package-Requires: ((cl-lib "0.3"))
 
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -63,9 +64,9 @@
 ;;; Code:
 
 (eval-when-compile
-  (require 'cl)
   (require 'easy-mmode))
 
+(require 'cl-lib)
 (require 'image)
 (require 'image-file)
 (require 'advice)
@@ -129,7 +130,7 @@
 
 ;;TODO not used locally
 (defun imagex-get-image-region-at-point (point)
-  (destructuring-bind (begin end)
+  (cl-destructuring-bind (begin end)
       (imagex--display-region point)
     (cons begin end)))
 
@@ -142,14 +143,14 @@
 (defun imagex--replace-current-image (new-image)
   (cond
    ((derived-mode-p 'image-mode)
-    (destructuring-bind (begin end)
+    (cl-destructuring-bind (begin end)
         (imagex--display-region (point-min))
       (imagex--replace-image begin end new-image)))
    ((derived-mode-p 'doc-view-mode)
     (let ((ov (car (overlays-in (point-min) (point-max)))))
       (overlay-put ov 'display new-image)))
    (t
-    (destructuring-bind (begin end)
+    (cl-destructuring-bind (begin end)
         (imagex--display-region (point))
       (imagex--replace-image begin end new-image)))))
 
@@ -252,7 +253,7 @@
 
 (defun imagex-sticky--convert-image (converter)
   (condition-case nil
-      (destructuring-bind (image begin end)
+      (cl-destructuring-bind (image begin end)
           (imagex-sticky--current-display)
         (let ((new (funcall converter image)))
           (imagex--replace-image begin end new)))
@@ -287,7 +288,7 @@ If there is no image, fallback to original command."
 If there is no image, fallback to original command."
   (interactive)
   (condition-case nil
-      (destructuring-bind (image _ _)
+      (cl-destructuring-bind (image _ _)
           (imagex-sticky--current-display)
         (let ((spec (cdr image)))
           (cond
@@ -373,22 +374,22 @@ by 90 degrees."
     ;; only image object (Not sliced image)
     (when (and disp (consp disp)
                (eq (car disp) 'image))
-      (destructuring-bind (begin end)
+      (cl-destructuring-bind (begin end)
           (imagex--display-region (point))
         (list disp begin end)))))
 
 
 
 (defun imagex--activate-advice (flag alist)
-  (loop for (fn adname) in alist
-        do (condition-case nil
-               (progn
-                 (funcall (if flag
-                              'ad-enable-advice
-                            'ad-disable-advice)
-                          fn 'around adname)
-                 (ad-activate fn))
-             (error nil))))
+  (cl-loop for (fn adname) in alist
+           do (condition-case nil
+                  (progn
+                    (funcall (if flag
+                                 'ad-enable-advice
+                               'ad-disable-advice)
+                             fn 'around adname)
+                    (ad-activate fn))
+                (error nil))))
 
 ;; adjust image fit to window if window has just one image
 ;; this function is invoked from `imagex-auto-adjust-mode'
@@ -466,12 +467,12 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
        (ad-activate 'create-image))))
 
 (defadvice create-image
-  (around imagex-create-image (&rest args) disable)
+    (around imagex-create-image (&rest args) disable)
   (setq ad-return-value
         (apply 'imagex-create-adjusted-image args)))
 
 (defun imagex-create-adjusted-image
-  (file-or-data &optional type data-p &rest props)
+    (file-or-data &optional type data-p &rest props)
   (let ((img
          (apply (ad-get-orig-definition 'create-image)
                 file-or-data type data-p props)))
