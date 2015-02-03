@@ -233,6 +233,9 @@
         (/ (log (prefix-numeric-value arg) 2) 2)) 90))
    (t 90)))
 
+(defun imagex-one-image-mode-p ()
+  (memq major-mode '(image-mode doc-view-mode)))
+
 ;;
 ;; Image+ Minor mode definitions
 ;;
@@ -268,6 +271,27 @@
   (when (executable-find imagex-convert-command)
     (unless (minibufferp (current-buffer))
       (imagex-sticky-mode 1))))
+
+(defun imagex-sticky--current-textprop-display ()
+  (let ((disp (get-text-property (point) 'display)))
+    ;; only image object (Not sliced image)
+    (when (and disp (consp disp)
+               (eq (car disp) 'image))
+      (cl-destructuring-bind (begin end)
+          (imagex--display-region (point))
+        (list disp begin end)))))
+
+(defun imagex-sticky--current-ovprop-display ()
+  (let* ((ovs (overlays-at (point)))
+         (ov (car (cl-remove-if-not
+                   (lambda (ov) (overlay-get ov 'display))
+                   ovs))))
+    (when (and ov (overlay-get ov 'display))
+      (setq disp (overlay-get ov 'display))
+      ;; only image object (Not sliced image)
+      (and disp (consp disp)
+           (eq (car disp) 'image)
+           (list disp ov)))))
 
 ;;TODO make obsolete use hydra
 (defun imagex-sticky-fallback (&optional except-command)
@@ -371,30 +395,6 @@ by 90 degrees."
   (interactive "P")
   (imagex-sticky--rotate-image
    (imagex--rotate-degrees degrees)))
-
-(defun imagex-one-image-mode-p ()
-  (memq major-mode '(image-mode doc-view-mode)))
-
-(defun imagex-sticky--current-textprop-display ()
-  (let ((disp (get-text-property (point) 'display)))
-    ;; only image object (Not sliced image)
-    (when (and disp (consp disp)
-               (eq (car disp) 'image))
-      (cl-destructuring-bind (begin end)
-          (imagex--display-region (point))
-        (list disp begin end)))))
-
-(defun imagex-sticky--current-ovprop-display ()
-  (let* ((ovs (overlays-at (point)))
-         (ov (car (cl-remove-if-not
-                   (lambda (ov) (overlay-get ov 'display))
-                   ovs))))
-    (when (and ov (overlay-get ov 'display))
-      (setq disp (overlay-get ov 'display))
-      ;; only image object (Not sliced image)
-      (and disp (consp disp)
-           (eq (car disp) 'image)
-           (list disp ov)))))
 
 
 
