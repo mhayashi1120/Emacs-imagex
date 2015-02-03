@@ -134,6 +134,10 @@
       (imagex--display-region point)
     (cons begin end)))
 
+(defun imagex-image-object-p (object)
+  (and object (consp object)
+       (eq (car object) 'image)))
+
 (defun imagex--replace-textprop-image (start end image)
   (let ((flag (buffer-modified-p))
         (inhibit-read-only t))
@@ -172,8 +176,7 @@
       (when (and ov (overlay-get ov 'display))
         (setq disp (overlay-get ov 'display)))
       ;; only image object (Not sliced image)
-      (and disp (consp disp)
-           (eq (car disp) 'image)
+      (and (imagex-image-object-p disp)
            disp)))))
 
 (defun imagex--display-region (point)
@@ -275,8 +278,7 @@
 (defun imagex-sticky--current-textprop-display ()
   (let ((disp (get-text-property (point) 'display)))
     ;; only image object (Not sliced image)
-    (when (and disp (consp disp)
-               (eq (car disp) 'image))
+    (when (imagex-image-object-p disp)
       (cl-destructuring-bind (begin end)
           (imagex--display-region (point))
         (list disp begin end)))))
@@ -289,8 +291,7 @@
     (when (and ov (overlay-get ov 'display))
       (setq disp (overlay-get ov 'display))
       ;; only image object (Not sliced image)
-      (and disp (consp disp)
-           (eq (car disp) 'image)
+      (and (imagex-image-object-p disp)
            (list disp ov)))))
 
 ;;TODO make obsolete use hydra
@@ -306,10 +307,16 @@
 
 (defun imagex-sticky--convert-image (converter)
   (condition-case nil
-      (cl-destructuring-bind (image begin end)
-          (imagex-sticky--current-textprop-display)
-        (let ((new (funcall converter image)))
-          (imagex--replace-textprop-image begin end new)))
+      (condition-case nil
+          (cl-destructuring-bind (image ov)
+              (imagex-sticky--current-ovprop-display)
+            (let ((new (funcall converter image)))
+              (overlay-put ov 'display new)))
+        (error
+         (cl-destructuring-bind (image begin end)
+             (imagex-sticky--current-textprop-display)
+           (let ((new (funcall converter image)))
+             (imagex--replace-textprop-image begin end new)))))
     (error
      (imagex-sticky-fallback this-command))))
 
