@@ -61,6 +61,13 @@
 
 ;;     (eval-after-load 'image+ '(imagex-auto-adjust-mode 1))
 
+;; * TODO Sample Hydra setting
+;;  https://github.com/abo-abo/hydra
+;;
+;;     (eval-after-load 'image+
+;;       `(when (require 'hydra nil t)
+;;          (hydra-create "C-x C-l" imagex-hydra-default-heads)))
+
 ;;; Code:
 
 (eval-when-compile
@@ -258,6 +265,18 @@
 
     (setq imagex-sticky-mode-map map)))
 
+(defvar imagex-hydra-default-heads
+  '(("+" imagex-sticky-zoom-in "zoom in")
+    ("-" imagex-sticky-zoom-out "zoom out")
+    ("M" imagex-sticky-maximize "maximize")
+    ("O" imagex-sticky-restore-original "restore original")
+    ("S" imagex-sticky-save-image "save file")
+    ("r" imagex-sticky-rotate-right "rotate right")
+    ("l" imagex-sticky-rotate-left "rotate left"))
+  "
+Sample:
+\(hydra-create \"C-x C-l\" imagex-hydra-default-heads)")
+
 ;;;###autoload
 (define-minor-mode imagex-sticky-mode
   "To manipulate Image at point."
@@ -349,7 +368,8 @@ If there is no image, fallback to original command."
   (interactive)
   (condition-case nil
       (cl-destructuring-bind (image . _)
-          (imagex-sticky--current-textprop-display)
+          (or (imagex-sticky--current-textprop-display)
+              (imagex-sticky--current-ovprop-display))
         (let ((spec (cdr image)))
           (cond
            ((plist-get spec :file)
@@ -447,6 +467,16 @@ by 90 degrees."
     doc-view-insert-image
     ))
 
+(defmacro imagex--auto-adjust-activate (&rest body)
+  "Execute BODY with activating `create-image' advice."
+  `(progn
+     (ad-enable-advice 'create-image 'around 'imagex-create-image)
+     (ad-activate 'create-image)
+     (unwind-protect
+         (progn ,@body)
+       (ad-disable-advice 'create-image 'around 'imagex-create-image)
+       (ad-activate 'create-image))))
+
 ;;;###autoload
 (define-minor-mode imagex-auto-adjust-mode
   "Adjust image to current frame automatically in `image-mode'.
@@ -462,7 +492,7 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
                    (advice (ad-make-advice
                             adname nil nil
                             `(advice lambda (&rest args)
-                                     (imagex-auto-adjust-activate
+                                     (imagex--auto-adjust-activate
                                       (setq ad-return-value ad-do-it))))))
               (ad-add-advice fn advice 'around nil)
               (list fn adname)))
@@ -480,21 +510,6 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
       ;; No need to restore originals
       (remove-hook 'window-configuration-change-hook
                    'imagex--adjust-image-to-window)))))
-
-(defmacro imagex-auto-adjust-activate (&rest body)
-  "Execute BODY with activating `create-image' advice."
-  `(progn
-     (ad-enable-advice 'create-image 'around 'imagex-create-image)
-     (ad-activate 'create-image)
-     (unwind-protect
-         (progn ,@body)
-       (ad-disable-advice 'create-image 'around 'imagex-create-image)
-       (ad-activate 'create-image))))
-
-(defadvice create-image
-    (around imagex-create-image (&rest args) disable)
-  (setq ad-return-value
-        (apply 'imagex-create-adjusted-image args)))
 
 (defun imagex-create-adjusted-image
     (file-or-data &optional type data-p &rest props)
@@ -517,6 +532,11 @@ Type \\[imagex-sticky-restore-original] to restore the original image.
           (sit-for 0.5)
           nil))
        img)))))
+
+(defadvice create-image
+    (around imagex-create-image (&rest args) disable)
+  (setq ad-return-value
+        (apply 'imagex-create-adjusted-image args)))
 
 
 
