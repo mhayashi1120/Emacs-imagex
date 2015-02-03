@@ -134,7 +134,7 @@
       (imagex--display-region point)
     (cons begin end)))
 
-(defun imagex--replace-image (start end image)
+(defun imagex--replace-textprop-image (start end image)
   (let ((flag (buffer-modified-p))
         (inhibit-read-only t))
     (put-text-property start end 'display image)
@@ -145,14 +145,43 @@
    ((derived-mode-p 'image-mode)
     (cl-destructuring-bind (begin end)
         (imagex--display-region (point-min))
-      (imagex--replace-image begin end new-image)))
+      (imagex--replace-textprop-image begin end new-image)))
    ((derived-mode-p 'doc-view-mode)
     (let ((ov (car (overlays-in (point-min) (point-max)))))
       (overlay-put ov 'display new-image)))
    (t
     (cl-destructuring-bind (begin end)
         (imagex--display-region (point))
-      (imagex--replace-image begin end new-image)))))
+      (imagex--replace-textprop-image begin end new-image)))))
+
+(declare-function image-get-display-property nil)
+(declare-function doc-view-current-image nil)
+
+(defun imagex--current-image ()
+  (cond
+   ((derived-mode-p 'image-mode)
+    (image-get-display-property))
+   ((derived-mode-p 'doc-view-mode)
+    (doc-view-current-image))
+   (t
+    (let* ((ovs (overlays-at (point)))
+           (disp (get-text-property (point) 'display))
+           (ov (car (cl-remove-if-not
+                     (lambda (ov) (overlay-get ov 'display))
+                     ovs))))
+      (when (and ov (overlay-get ov 'display))
+        (setq disp (overlay-get ov 'display)))
+      ;; only image object (Not sliced image)
+      (and disp (consp disp)
+           (eq (car disp) 'image)
+           disp)))))
+
+(defun imagex--display-region (point)
+  (let* ((end (or (next-single-property-change point 'display)
+                  (point-max)))
+         (begin (or (previous-single-property-change end 'display)
+                    (point-min))))
+    (list begin end)))
 
 (defun imagex--zoom (image magnification)
   (condition-case nil
@@ -254,9 +283,9 @@
 (defun imagex-sticky--convert-image (converter)
   (condition-case nil
       (cl-destructuring-bind (image begin end)
-          (imagex-sticky--current-display)
+          (imagex-sticky--current-textprop-display)
         (let ((new (funcall converter image)))
-          (imagex--replace-image begin end new)))
+          (imagex--replace-textprop-image begin end new)))
     (error
      (imagex-sticky-fallback this-command))))
 
@@ -289,7 +318,7 @@ If there is no image, fallback to original command."
   (interactive)
   (condition-case nil
       (cl-destructuring-bind (image _ _)
-          (imagex-sticky--current-display)
+          (imagex-sticky--current-textprop-display)
         (let ((spec (cdr image)))
           (cond
            ((plist-get spec :file)
@@ -346,30 +375,7 @@ by 90 degrees."
 (defun imagex-one-image-mode-p ()
   (memq major-mode '(image-mode doc-view-mode)))
 
-(declare-function image-get-display-property nil)
-(declare-function doc-view-current-image nil)
-
-(defun imagex--current-image ()
-  (cond
-   ((derived-mode-p 'image-mode)
-    (image-get-display-property))
-   ((derived-mode-p 'doc-view-mode)
-    (doc-view-current-image))
-   (t
-    (let ((disp (get-text-property (point) 'display)))
-      ;; only image object (Not sliced image)
-      (and disp (consp disp)
-           (eq (car disp) 'image)
-           disp)))))
-
-(defun imagex--display-region (point)
-  (let* ((end (or (next-single-property-change point 'display)
-                  (point-max)))
-         (begin (or (previous-single-property-change end 'display)
-                    (point-min))))
-    (list begin end)))
-
-(defun imagex-sticky--current-display ()
+(defun imagex-sticky--current-textprop-display ()
   (let ((disp (get-text-property (point) 'display)))
     ;; only image object (Not sliced image)
     (when (and disp (consp disp)
