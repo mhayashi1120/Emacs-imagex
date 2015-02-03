@@ -317,7 +317,7 @@ If there is no image, fallback to original command."
 If there is no image, fallback to original command."
   (interactive)
   (condition-case nil
-      (cl-destructuring-bind (image _ _)
+      (cl-destructuring-bind (image . _)
           (imagex-sticky--current-textprop-display)
         (let ((spec (cdr image)))
           (cond
@@ -383,6 +383,18 @@ by 90 degrees."
       (cl-destructuring-bind (begin end)
           (imagex--display-region (point))
         (list disp begin end)))))
+
+(defun imagex-sticky--current-ovprop-display ()
+  (let* ((ovs (overlays-at (point)))
+         (ov (car (cl-remove-if-not
+                   (lambda (ov) (overlay-get ov 'display))
+                   ovs))))
+    (when (and ov (overlay-get ov 'display))
+      (setq disp (overlay-get ov 'display))
+      ;; only image object (Not sliced image)
+      (and disp (consp disp)
+           (eq (car disp) 'image)
+           (list disp ov)))))
 
 
 
