@@ -201,23 +201,21 @@
     (list begin end)))
 
 (defun imagex--zoom (image magnification)
-  (condition-case nil
-      (let* ((pixels (image-size image t))
-             (new (imagex--call-convert
-                   image
-                   "-resize"
-                   (format "%sx%s"
-                           (truncate (* (car pixels) magnification))
-                           (truncate (* (cdr pixels) magnification))))))
-        ;; clone source image properties
-        (when (plist-get (cdr image) :margin)
-          (plist-put (cdr new) :margin
-                     (plist-get (cdr image) :margin)))
-        (when (plist-get (cdr image) :relief)
-          (plist-put (cdr new) :relief
-                     (plist-get (cdr image) :relief)))
-        new)
-    (error nil)))
+  (let* ((pixels (image-size image t))
+         (new (imagex--call-convert
+               image
+               "-resize"
+               (format "%sx%s"
+                       (truncate (* (car pixels) magnification))
+                       (truncate (* (cdr pixels) magnification))))))
+    ;; clone source image properties
+    (when (plist-get (cdr image) :margin)
+      (plist-put (cdr new) :margin
+                 (plist-get (cdr image) :margin)))
+    (when (plist-get (cdr image) :relief)
+      (plist-put (cdr new) :relief
+                 (plist-get (cdr image) :relief)))
+    new))
 
 (defun imagex--fit-to-size (image width height &optional max)
   "Resize IMAGE with preserving magnification."
