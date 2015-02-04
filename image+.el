@@ -35,6 +35,17 @@
 
 ;; ## Usage:
 
+;; * [__Recommended__] Sample Hydra setting. Instead of `imagex-global-sticky-mode' .
+
+;;  https://github.com/abo-abo/hydra
+
+;;     (eval-after-load 'image+
+;;       `(when (require 'hydra nil t)
+;;          (hydra-create "C-x C-l" imagex-hydra-default-heads)))
+
+;;  Then try to type `C-x C-l +` to zoom-in the current image.
+;;  You can zoom-out with type `-` .
+
 ;; * To manupulate a image under cursor.
 
 ;;     M-x imagex-sticky-mode
@@ -60,16 +71,6 @@
 ;;   Or in .emacs:
 
 ;;     (eval-after-load 'image+ '(imagex-auto-adjust-mode 1))
-
-;; * Sample Hydra setting
-;;  https://github.com/abo-abo/hydra
-;;
-;;     (eval-after-load 'image+
-;;       `(when (require 'hydra nil t)
-;;          (hydra-create "C-x C-l" imagex-hydra-default-heads)))
-;;
-;;  Then try to type `C-x C-l +` to zoom-in the current image.
-;;  You can zoom-out with type `-` .
 
 ;; * If you do not want error message in minibuffer:
 
