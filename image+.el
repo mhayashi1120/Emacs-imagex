@@ -132,14 +132,14 @@
           (unless (eq (apply 'call-process-region
                              (point-min) (point-max) imagex-convert-command
                              t (current-buffer) nil
-                             `(,@args "-" "-")) 0)
+                             `("-" ,@args "-")) 0)
             (error "Cannot convert image")))
          ((plist-get spec :file)
           ;; stdin to current-buffer
           (unless (eq (apply 'call-process
                              imagex-convert-command
                              (plist-get spec :file) t nil
-                             `(,@args "-" "-")) 0)
+                             `("-" ,@args "-")) 0)
             (error "Cannot convert image")))
          (t
           (error "Not a supported image")))
