@@ -27,7 +27,7 @@ desired. And put the following expression into your ~/.emacs.
  Then try to type `C-x C-l +` to zoom-in the current image.
  You can zoom-out with type `-` .
 
-* To manupulate a image under cursor.
+* To manipulate a image under cursor.
 
 ```
 M-x imagex-sticky-mode
