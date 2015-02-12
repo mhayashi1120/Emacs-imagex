@@ -335,19 +335,28 @@ Sample:
         (call-interactively command)))))
 
 (defun imagex-sticky--convert-image (converter)
-  (condition-case nil
-      (condition-case nil
-          (cl-destructuring-bind (image ov)
-              (imagex-sticky--current-ovprop-display)
-            (let ((new (funcall converter image)))
-              (overlay-put ov 'display new)))
+  (catch 'done
+    (let (err)
+      (condition-case err1
+          (let ((display (imagex-sticky--current-ovprop-display)))
+            (when display
+              (cl-destructuring-bind (image ov) display
+                (let ((new (funcall converter image)))
+                  (overlay-put ov 'display new))
+                (throw 'done t))))
         (error
-         (cl-destructuring-bind (image begin end)
-             (imagex-sticky--current-textprop-display)
-           (let ((new (funcall converter image)))
-             (imagex--replace-textprop-image begin end new)))))
-    (error
-     (imagex-sticky-fallback this-command))))
+         (setq err (append err err1))))
+      (condition-case err2
+          (let ((display (imagex-sticky--current-textprop-display)))
+            (when display
+              (cl-destructuring-bind (image begin end) display
+                (let ((new (funcall converter image)))
+                  (imagex--replace-textprop-image begin end new))
+                (throw 'done t))))
+        (error
+         (setq err (append err err2))))
+      (imagex--message "%s" err)
+      (imagex-sticky-fallback this-command))))
 
 (defun imagex-sticky--rotate-image (degrees)
   (imagex-sticky--convert-image
