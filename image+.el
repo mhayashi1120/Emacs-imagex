@@ -355,7 +355,8 @@ Sample:
                 (throw 'done t))))
         (error
          (setq err (append err err2))))
-      (imagex--message "%s" err)
+      (when err
+        (imagex--message "%s" err))
       (imagex-sticky-fallback this-command))))
 
 (defun imagex-sticky--rotate-image (degrees)
