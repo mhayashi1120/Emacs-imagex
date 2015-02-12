@@ -1,4 +1,4 @@
-;;; image+.el --- Image manupulation extensions for Emacs
+;;; image+.el --- Image manipulate extensions for Emacs
 
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: multimedia, extensions
@@ -46,7 +46,7 @@
 ;;  Then try to type `C-x C-l +` to zoom-in the current image.
 ;;  You can zoom-out with type `-` .
 
-;; * To manupulate a image under cursor.
+;; * To manipulate a image under cursor.
 
 ;;     M-x imagex-sticky-mode
 
