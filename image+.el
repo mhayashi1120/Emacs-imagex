@@ -2,9 +2,9 @@
 
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: multimedia, extensions
-;; URL: http://github.com/mhayashi1120/Emacs-imagex/raw/master/image+.el
+;; URL: https://github.com/mhayashi1120/Emacs-imagex
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.6.1
+;; Version: 0.6.2
 ;; Package-Requires: ((cl-lib "0.3"))
 
 ;; This program is free software; you can redistribute it and/or
@@ -41,7 +41,15 @@
 
 ;;     (eval-after-load 'image+
 ;;       `(when (require 'hydra nil t)
-;;          (hydra-create "C-x C-l" imagex-hydra-default-heads)))
+;;          (defhydra imagex-sticky-binding (global-map "C-x C-l")
+;;            "Manipulating Image"
+;;            ("+" imagex-sticky-zoom-in "zoom in")
+;;            ("-" imagex-sticky-zoom-out "zoom out")
+;;            ("M" imagex-sticky-maximize "maximize")
+;;            ("O" imagex-sticky-restore-original "restore original")
+;;            ("S" imagex-sticky-save-image "save file")
+;;            ("r" imagex-sticky-rotate-right "rotate right")
+;;            ("l" imagex-sticky-rotate-left "rotate left"))))
 
 ;;  Then try to type `C-x C-l +` to zoom-in the current image.
 ;;  You can zoom-out with type `-` .
@@ -274,18 +282,6 @@
 
     (setq imagex-sticky-mode-map map)))
 
-(defvar imagex-hydra-default-heads
-  '(("+" imagex-sticky-zoom-in "zoom in")
-    ("-" imagex-sticky-zoom-out "zoom out")
-    ("M" imagex-sticky-maximize "maximize")
-    ("O" imagex-sticky-restore-original "restore original")
-    ("S" imagex-sticky-save-image "save file")
-    ("r" imagex-sticky-rotate-right "rotate right")
-    ("l" imagex-sticky-rotate-left "rotate left"))
-  "
-Sample:
-\(hydra-create \"C-x C-l\" imagex-hydra-default-heads)")
-
 ;;;###autoload
 (define-minor-mode imagex-sticky-mode
   "To manipulate Image at point."
@@ -342,6 +338,7 @@ Sample:
             (when display
               (cl-destructuring-bind (image ov) display
                 (let ((new (funcall converter image)))
+                  (plist-put (cdr new) 'imagex-manual-manipulation t)
                   (overlay-put ov 'display new))
                 (throw 'done t))))
         (error
@@ -351,6 +348,7 @@ Sample:
             (when display
               (cl-destructuring-bind (image begin end) display
                 (let ((new (funcall converter image)))
+                  (plist-put (cdr new) 'imagex-manual-manipulation t)
                   (imagex--replace-textprop-image begin end new))
                 (throw 'done t))))
         (error
@@ -465,10 +463,12 @@ by 90 degrees."
     (condition-case err
         (let ((image (imagex--current-image)))
           (when image
-            (let ((prev-edges (plist-get (cdr image) 'imagex-auto-adjusted-edges))
+            (let ((manualp (plist-get (cdr image) 'imagex-manual-manipulation))
+                  (prev-edges (plist-get (cdr image) 'imagex-auto-adjusted-edges))
                   (curr-edges (window-edges)))
-              (when (or (null prev-edges)
-                        (not (equal curr-edges prev-edges)))
+              (when (and (not manualp)
+                         (or (null prev-edges)
+                             (not (equal curr-edges prev-edges))))
                 (let* ((orig (plist-get (cdr image) 'imagex-original-image))
                        (target (or orig image))
                        (new-image
