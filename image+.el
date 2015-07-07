@@ -4,7 +4,7 @@
 ;; Keywords: multimedia, extensions
 ;; URL: https://github.com/mhayashi1120/Emacs-imagex
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.6.2
+;; Version: 0.6.3
 ;; Package-Requires: ((cl-lib "0.3"))
 
 ;; This program is free software; you can redistribute it and/or
@@ -462,7 +462,12 @@ by 90 degrees."
              (imagex-one-image-mode-p))
     (condition-case err
         (let ((image (imagex--current-image)))
-          (when image
+          (cond
+           ((null image))
+           ;; TODO work around to fix background file modification
+           ((not (verify-visited-file-modtime))
+            (error "Image is modified on the disk"))
+           (t
             (let ((manualp (plist-get (cdr image) 'imagex-manual-manipulation))
                   (prev-edges (plist-get (cdr image) 'imagex-auto-adjusted-edges))
                   (curr-edges (window-edges)))
@@ -477,7 +482,7 @@ by 90 degrees."
                   (when new-image
                     (imagex--replace-current-image new-image)
                     (plist-put (cdr new-image)
-                               'imagex-auto-adjusted-edges curr-edges)))))))
+                               'imagex-auto-adjusted-edges curr-edges))))))))
       (error
        (imagex--message "%s" err)))))
 
