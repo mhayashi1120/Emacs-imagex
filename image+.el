@@ -234,8 +234,8 @@
          (mr (+ (* 2 margin) (* 2 relief)))
          (w (+ (car pixels) mr))
          (h (+ (cdr pixels) mr))
-         (wr (/ width (ftruncate w)))
-         (hr (/ height (ftruncate h)))
+         (wr (/ width (ftruncate (float w))))
+         (hr (/ height (ftruncate (float h))))
          (magnification (apply 'min (delq nil (list wr hr max)))))
     (imagex--zoom image magnification)))
 
